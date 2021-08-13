@@ -1,5 +1,5 @@
 #include <torch/csrc/utils/pybind.h>
-#include "mkl.h"
+#include <mkl.h>
 #include <ATen/Config.h>
 
 #if AT_MKLDNN_ENABLED()

@@ -10,24 +10,17 @@ def is_available():
 class verbose(object):
     def __init__(self, level=0):
         self.level = level
-        self.status = 0
 
     def __enter__(self):
         if self.level == 0:
             return
-        self.status = torch._C._verbose.mkldnn_set_verbose(self.level)
-        if self.status != 1:
-            print('[Warning] Failed to enable MKLDNN verbose.')
-            return
-        else:
-            return self
+        st = torch._C._verbose.mkldnn_set_verbose(self.level)
+        assert st, "Failed to set MKLDNN into verbose mode. Please consider to disable this verbose scope."
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.status != 1:
-            return
-        else:
-            torch._C._verbose.mkldnn_set_verbose(0)
-            return False
+        torch._C._verbose.mkldnn_set_verbose(0)
+        return False
 
 def set_flags(_enabled):
     orig_flags = (torch._C._get_mkldnn_enabled(),)
