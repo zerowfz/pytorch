@@ -5,7 +5,7 @@ def is_available():
     return torch._C.has_mkl
 
 VERBOSE_OFF = 0
-VERBOSE_ON  = 1
+VERBOSE_ON = 1
 class verbose(object):
     def __init__(self, enable):
         self.enable = enable
