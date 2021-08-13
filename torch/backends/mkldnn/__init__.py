@@ -7,19 +7,22 @@ def is_available():
     r"""Returns whether PyTorch is built with MKL-DNN support."""
     return torch._C.has_mkldnn
 
+VERBOSE_OFF = 0
+VERBOSE_ON = 1
+VERBOSE_ON_CREATION = 2
 class verbose(object):
-    def __init__(self, level=0):
+    def __init__(self, level):
         self.level = level
 
     def __enter__(self):
-        if self.level == 0:
+        if self.level == MKLDNN_VERBOSE_OFF:
             return
         st = torch._C._verbose.mkldnn_set_verbose(self.level)
         assert st, "Failed to set MKLDNN into verbose mode. Please consider to disable this verbose scope."
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        torch._C._verbose.mkldnn_set_verbose(0)
+        torch._C._verbose.mkldnn_set_verbose(MKLDNN_VERBOSE_OFF)
         return False
 
 def set_flags(_enabled):
