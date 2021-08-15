@@ -15,14 +15,14 @@ class verbose(object):
         self.level = level
 
     def __enter__(self):
-        if self.level == MKLDNN_VERBOSE_OFF:
+        if self.level == VERBOSE_OFF:
             return
         st = torch._C._verbose.mkldnn_set_verbose(self.level)
         assert st, "Failed to set MKLDNN into verbose mode. Please consider to disable this verbose scope."
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        torch._C._verbose.mkldnn_set_verbose(MKLDNN_VERBOSE_OFF)
+        torch._C._verbose.mkldnn_set_verbose(VERBOSE_OFF)
         return False
 
 def set_flags(_enabled):
