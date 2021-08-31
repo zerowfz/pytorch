@@ -1,6 +1,9 @@
 #include <torch/csrc/utils/pybind.h>
-#include <mkl.h>
 #include <ATen/Config.h>
+
+#if AT_MKL_ENABLED()
+#include <mkl.h>
+#endif
 
 #if AT_MKLDNN_ENABLED()
 #include <ATen/native/mkldnn/MKLDNNCommon.h>
@@ -9,7 +12,11 @@
 namespace torch {
 
 int _mkl_set_verbose(int enable) {
+#if AT_MKLDNN_ENABLED()
   return mkl_verbose(enable);
+#else
+  return 0;
+#endif
 }
 
 int _mkldnn_set_verbose(int level) {
