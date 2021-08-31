@@ -12,7 +12,7 @@
 namespace torch {
 
 int _mkl_set_verbose(int enable) {
-#if AT_MKLDNN_ENABLED()
+#if AT_MKL_ENABLED()
   return mkl_verbose(enable);
 #else
   return 0;
