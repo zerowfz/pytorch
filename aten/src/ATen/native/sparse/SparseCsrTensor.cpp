@@ -53,9 +53,17 @@ void _validate_sparse_csr_tensor_args(const Tensor& crow_indices, const Tensor& 
       values.dim() == 1 || is_block_sparse,
       "values must have dim=1 or dim=3 but got values.dim()=",
       values.dim());
+  int64_t block_size[2];
   if (is_block_sparse) {
-    IntArrayRef block_size({values.size()[1], values.size()[2]});
-    bool block_numel = block_size[0] * block_size[1];
+    TORCH_CHECK(
+        values.device().type() == kCPU,
+        "device type of blocksparse values (",
+        values.device().type(),
+        ") must be CPU ",
+        "but got ", values.device(), "instead.");
+    block_size[0] = values.size()[1];
+    block_size[1] = values.size()[2];
+    int64_t block_numel = block_size[0] * block_size[1];
     TORCH_CHECK(block_size[0] == block_size[1] && block_size[0] > 1,
         "For block sparse CSR Tensors (3-dim values) the ",
         "blocks must be square and greater than 1.",

@@ -7,7 +7,7 @@ import unittest
 from torch.testing import get_all_complex_dtypes, get_all_fp_dtypes, floating_and_complex_types, make_tensor
 from torch.testing._internal.common_cuda import SM53OrLater, SM80OrLater, TEST_CUSPARSE_GENERIC
 from torch.testing._internal.common_utils import \
-    (TEST_WITH_ROCM, TEST_SCIPY, TestCase, run_tests, load_tests, coalescedonoff)
+    (TEST_WITH_ROCM, TEST_SCIPY, TestCase, run_tests, load_tests, coalescedonoff, blocksizes)
 from torch.testing._internal.common_device_type import \
     (ops, instantiate_device_type_tests, dtypes, dtypesIfCUDA, onlyCPU, onlyCUDA, skipCUDAIfNoCusparseGeneric,
      precisionOverride, skipMeta, skipCUDAIf, skipCUDAIfRocm, skipCPUIfNoMklSparse)
@@ -558,6 +558,17 @@ class TestSparseCSR(TestCase):
 
         values = torch.tensor([2, 1, 6, 4, 10, 3, 5, 9, 8, 7], dtype=dtype, device=device)
         self.assertEqual(csr.values(), values)
+
+    @skipCPUIfNoMklSparse # Not sure this is needed.
+    @dtypes(torch.double)
+    def test_csr_to_block_csr(self, device, dtype):
+        t = torch.tensor([0, 0, 1, 2],
+                         [0, 1, 0, 0],
+                         [0, 0, 0, 1],
+                         [0, 0, 0, 0]).to_sparse_csr()
+        block_t = torch.csr_to_block_csr(t)
+        self.assertEqual(block_t.values().dim(), 3)
+        pass
 
     @dtypes(*get_all_dtypes())
     def test_sparse_csr_from_dense_convert_error(self, device, dtype):

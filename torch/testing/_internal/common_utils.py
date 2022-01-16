@@ -3005,6 +3005,16 @@ def coalescedonoff(f):
         f(self, *args, **kwargs, coalesced=False)
     return wrapped
 
+# This wraps a test to run with an explicitly specified list of block sizes.
+# It runs the test at least once passing None as blocksize.
+def blocksizes(*blocksizes):
+    @wraps(f)
+    def wrapped(self, *args, **kwargs):
+        f(self, *args, **kwargs, blocksize=None)
+        for blocksize in blocksizes:
+            f(self, *args, **kwargs, coalesced=blocksize)
+    return wrapped
+
 
 @contextlib.contextmanager
 def disable_gc():
