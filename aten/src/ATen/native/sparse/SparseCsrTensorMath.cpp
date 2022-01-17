@@ -716,19 +716,19 @@ Tensor _csr_to_block_csr_cpu(const Tensor& self, IntArrayRef blocksize) {
     int64_t n_row = self.size(0);
     int64_t n_col = self.size(1);
     AT_DISPATCH_INDEX_TYPES(input_crow_indices.scalar_type(), "_csr_to_block_csr_cpu", [&] {
-      num_blocks = csr_count_blocks(
+      num_blocks = csr_count_blocks<index_t>(
           self.size(0),
           self.size(1),
           blocksize[0],
           blocksize[1],
-          input_crow_indices.data_ptr<scalar_t>(),
-          input_col_indices.data_ptr<scalar_t>());
+          input_crow_indices.data_ptr<index_t>(),
+          input_col_indices.data_ptr<index_t>());
     });
     Tensor result_values = input_values.reshape({num_blocks, blocksize[0], blocksize[1]});
     Tensor result_crow_indices = input_crow_indices.new_empty(num_blocks + 1);
     Tensor result_col_indices = input_col_indices.new_empty({num_blocks, blocksize[0], blocksize[1]});
-    if (self.values.scalar_type() == ScalarType::Int) {
-      AT_DISPATCH_FLOAT_TYPES(input_crow_indices.scalar_type(), "_csr_to_block_csr_cpu", [&] {
+    if (input_values.scalar_type() == ScalarType::Int) {
+      AT_DISPATCH_FLOATING_TYPES(input_crow_indices.scalar_type(), "_csr_to_block_csr_cpu", [&] {
         _csr_to_block_csr_cpu_kernel<int32_t, scalar_t> (
             n_row, n_col, blocksize[0], blocksize[1],
             input_crow_indices.data_ptr<int32_t>(),
@@ -738,8 +738,8 @@ Tensor _csr_to_block_csr_cpu(const Tensor& self, IntArrayRef blocksize) {
             result_col_indices.data_ptr<int32_t>(),
             result_values.data_ptr<scalar_t>());
       });
-    else if (self.values.scalar_type() == ScalarType::Long) {
-      AT_DISPATCH_FLOAT_TYPES(input_crow_indices.scalar_type(), "_csr_to_block_csr_cpu", [&] {
+    } else if (input_values.scalar_type() == ScalarType::Long) {
+      AT_DISPATCH_FLOATING_TYPES(input_crow_indices.scalar_type(), "_csr_to_block_csr_cpu", [&] {
         _csr_to_block_csr_cpu_kernel<int64_t, scalar_t> (
             n_row, n_col, blocksize[0], blocksize[1],
             input_crow_indices.data_ptr<int64_t>(),
@@ -752,7 +752,7 @@ Tensor _csr_to_block_csr_cpu(const Tensor& self, IntArrayRef blocksize) {
     } else {
       TORCH_CHECK(false, "Index type must be int32_t or int64_t but got ", input_crow_indices.scalar_type());
     }
-    return at::native::_sparse_csr_unsafe(
+    return at::native::_sparse_csr_tensor_unsafe(
       result_crow_indices,
       result_col_indices,
       result_values,

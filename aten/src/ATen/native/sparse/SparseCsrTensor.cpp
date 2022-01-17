@@ -61,8 +61,8 @@ void _validate_sparse_csr_tensor_args(const Tensor& crow_indices, const Tensor& 
         values.device().type(),
         ") must be CPU ",
         "but got ", values.device(), "instead.");
-    block_size[0] = values.size()[1];
-    block_size[1] = values.size()[2];
+    block_size[0] = values.size(1);
+    block_size[1] = values.size(2);
     int64_t block_numel = block_size[0] * block_size[1];
     TORCH_CHECK(block_size[0] == block_size[1] && block_size[0] > 1,
         "For block sparse CSR Tensors (3-dim values) the ",
@@ -88,7 +88,7 @@ void _validate_sparse_csr_tensor_args(const Tensor& crow_indices, const Tensor& 
         "crow_indices.numel() must be size(0) / size(1) + 1, but got: ",
         crow_indices.numel());
     TORCH_CHECK(
-        col_indices.numel() == values.size[0],
+        col_indices.numel() == values.size(0),
         "col_indices and values leading size must have be equal, but got col_indices.numel(): ",
         col_indices.numel(),
         ", values.size(0): ",
