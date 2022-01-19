@@ -562,14 +562,15 @@ class TestSparseCSR(TestCase):
     @skipCPUIfNoMklSparse  # Not sure this is needed.
     @dtypes(torch.double)
     def test_csr_to_block_csr(self, device, dtype):
-        t_dense = torch.arange(16).float()
+        t_dense = torch.arange(16).float().reshape(4, 4)
+        print(t_dense)
         t = t_dense.to_sparse_csr()
-        print(t.size())
+        print(t)
         block_t = torch.csr_to_block_csr(t, (2, 2))
+        print(block_t)
+        print(block_t.values().size())
         self.assertEqual(block_t.values().dim(), 3)
         t0 = torch.block_csr_to_csr(block_t)
-        print(t)
-        print(block_t)
         print(t0)
         pass
 

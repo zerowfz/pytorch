@@ -617,12 +617,12 @@ void _csr_to_block_csr_cpu_kernel(
     const I n_col,
     const I R,
     const I C,
-    const I Ap[],
-    const I Aj[],
-    const T Ax[],
-    I Bp[],
-    I Bj[],
-    T Bx[]) {
+    const I* input_crow_indices,
+    const I* input_col_indices,
+    const T* input_values,
+    I* result_crow_indices,
+    I* result_col_indices,
+    T* result_values) {
   std::vector<T*> blocks(n_col / C + 1, (T*)0);
 
   assert(n_row % R == 0);
@@ -634,32 +634,32 @@ void _csr_to_block_csr_cpu_kernel(
   I RC = R * C;
   I n_blks = 0;
 
-  Bp[0] = 0;
+  result_crow_indices[0] = 0;
 
-  for (I bi = 0; bi < n_brow; bi++) {
+  for (I block_i = 0; block_i < n_brow; block_i++) {
     for (I r = 0; r < R; r++) {
-      I i = R * bi + r; // row index
-      for (I jj = Ap[i]; jj < Ap[i + 1]; jj++) {
-        I j = Aj[jj]; // column index
+      I i = R * block_i + r; // row index
+      for (I jj = input_crow_indices[i]; jj < input_crow_indices[i + 1]; jj++) {
+        I j = input_col_indices[jj]; // column index
 
-        I bj = j / C;
+        I block_j = j / C;
         I c = j % C;
 
-        if (blocks[bj] == 0) {
-          blocks[bj] = Bx + RC * n_blks;
-          Bj[n_blks] = bj;
+        if (blocks[block_j] == 0) {
+          blocks[block_j] = result_values + RC * n_blks;
+          result_col_indices[n_blks] = block_j;
           n_blks++;
         }
 
-        *(blocks[bj] + C * r + c) += Ax[jj];
+        *(blocks[block_j] + C * r + c) += input_values[jj];
       }
     }
 
-    for (I jj = Ap[R * bi]; jj < Ap[R * (bi + 1)]; jj++) {
-      blocks[Aj[jj] / C] = 0;
+    for (I jj = input_crow_indices[R * block_i]; jj < input_crow_indices[R * (block_i + 1)]; jj++) {
+      blocks[input_col_indices[jj] / C] = 0;
     }
 
-    Bp[bi + 1] = n_blks;
+    result_crow_indices[block_i + 1] = n_blks;
   }
 }
 
