@@ -569,6 +569,10 @@ class TestSparseCSR(TestCase):
         print(t.size())
         block_t = torch.csr_to_block_csr(t, (2, 2))
         self.assertEqual(block_t.values().dim(), 3)
+        t0 = torch.block_csr_to_csr(block_t)
+        print(t)
+        print(block_t)
+        print(t0)
         pass
 
     @dtypes(*get_all_dtypes())
