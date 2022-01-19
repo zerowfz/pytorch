@@ -613,55 +613,54 @@ TORCH_IMPL_FUNC(_convert_indices_from_csr_to_coo_structured_cpu) (
  */
 template <class I, class T>
 void _csr_to_block_csr_cpu_kernel(
-               const I n_row,
-               const I n_col,
-               const I R,
-               const I C,
-               const I Ap[],
-               const I Aj[],
-               const T Ax[],
-                     I Bp[],
-                     I Bj[],
-                     T Bx[])
-{
-    std::vector<T*> blocks(n_col/C + 1, (T*)0 );
+    const I n_row,
+    const I n_col,
+    const I R,
+    const I C,
+    const I Ap[],
+    const I Aj[],
+    const T Ax[],
+    I Bp[],
+    I Bj[],
+    T Bx[]) {
+  std::vector<T*> blocks(n_col / C + 1, (T*)0);
 
-    assert( n_row % R == 0 );
-    assert( n_col % C == 0 );
+  assert(n_row % R == 0);
+  assert(n_col % C == 0);
 
-    I n_brow = n_row / R;
-    //I n_bcol = n_col / C;
+  I n_brow = n_row / R;
+  // I n_bcol = n_col / C;
 
-    I RC = R*C;
-    I n_blks = 0;
+  I RC = R * C;
+  I n_blks = 0;
 
-    Bp[0] = 0;
+  Bp[0] = 0;
 
-    for(I bi = 0; bi < n_brow; bi++){
-        for(I r = 0; r < R; r++){
-            I i = R*bi + r;  //row index
-            for(I jj = Ap[i]; jj < Ap[i+1]; jj++){
-                I j = Aj[jj]; //column index
+  for (I bi = 0; bi < n_brow; bi++) {
+    for (I r = 0; r < R; r++) {
+      I i = R * bi + r; // row index
+      for (I jj = Ap[i]; jj < Ap[i + 1]; jj++) {
+        I j = Aj[jj]; // column index
 
-                I bj = j / C;
-                I c  = j % C;
+        I bj = j / C;
+        I c = j % C;
 
-                if( blocks[bj] == 0 ){
-                    blocks[bj] = Bx + RC*n_blks;
-                    Bj[n_blks] = bj;
-                    n_blks++;
-                }
-
-                *(blocks[bj] + C*r + c) += Ax[jj];
-            }
+        if (blocks[bj] == 0) {
+          blocks[bj] = Bx + RC * n_blks;
+          Bj[n_blks] = bj;
+          n_blks++;
         }
 
-        for(I jj = Ap[R*bi]; jj < Ap[R*(bi+1)]; jj++){
-            blocks[Aj[jj] / C] = 0;
-        }
-
-        Bp[bi+1] = n_blks;
+        *(blocks[bj] + C * r + c) += Ax[jj];
+      }
     }
+
+    for (I jj = Ap[R * bi]; jj < Ap[R * (bi + 1)]; jj++) {
+      blocks[Aj[jj] / C] = 0;
+    }
+
+    Bp[bi + 1] = n_blks;
+  }
 }
 
 /*
@@ -682,64 +681,72 @@ void _csr_to_block_csr_cpu_kernel(
  *
  */
 template <class I>
-I csr_count_blocks(const I n_row,
-                   const I n_col,
-                   const I R,
-                   const I C,
-                   const I Ap[],
-                   const I Aj[])
-{
-    std::vector<I> mask(n_col/C + 1, -1);
-    I n_blks = 0;
-    for(I i = 0; i < n_row; i++){
-        I bi = i/R;
-        for(I jj = Ap[i]; jj < Ap[i+1]; jj++){
-            I bj = Aj[jj]/C;
-            if(mask[bj] != bi){
-                mask[bj] = bi;
-                n_blks++;
-            }
-        }
+I csr_count_blocks(
+    const I n_row,
+    const I n_col,
+    const I R,
+    const I C,
+    const I Ap[],
+    const I Aj[]) {
+  std::vector<I> mask(n_col / C + 1, -1);
+  I n_blks = 0;
+  for (I i = 0; i < n_row; i++) {
+    I bi = i / R;
+    for (I jj = Ap[i]; jj < Ap[i + 1]; jj++) {
+      I bj = Aj[jj] / C;
+      if (mask[bj] != bi) {
+        mask[bj] = bi;
+        n_blks++;
+      }
     }
-    return n_blks;
+  }
+  return n_blks;
 }
 
 Tensor _csr_to_block_csr_cpu(const Tensor& self, IntArrayRef blocksize) {
-    Tensor input_values = self.values().contiguous();
-    Tensor input_crow_indices = self.crow_indices().contiguous();
-    Tensor input_col_indices = self.col_indices().contiguous();
+  Tensor input_values = self.values().contiguous();
+  Tensor input_crow_indices = self.crow_indices().contiguous();
+  Tensor input_col_indices = self.col_indices().contiguous();
 
-    int64_t blocknumel = blocksize[0] * blocksize[1];
-    // First we determine the number of blocks needed. For each given block, if it contains
-    // a non-zero element we will allocate values and indices for it.
-    int64_t num_blocks;
-    int64_t n_row = self.size(0);
-    int64_t n_col = self.size(1);
-    AT_DISPATCH_INDEX_TYPES(input_crow_indices.scalar_type(), "_csr_to_block_csr_cpu", [&] {
-      num_blocks = csr_count_blocks<index_t>(
-          self.size(0),
-          self.size(1),
-          blocksize[0],
-          blocksize[1],
-          input_crow_indices.data_ptr<index_t>(),
-          input_col_indices.data_ptr<index_t>());
-    });
-    Tensor result_values = input_values.new_empty({num_blocks, blocksize[0], blocksize[1]});
-    Tensor result_crow_indices = input_crow_indices.new_empty(num_blocks + 1);
-    Tensor result_col_indices = input_col_indices.new_empty({num_blocks, blocksize[0], blocksize[1]});
-    AT_DISPATCH_INDEX_TYPES(input_crow_indices.scalar_type(), "_csr_to_block_csr_cpu", [&] {
-      AT_DISPATCH_FLOATING_TYPES(input_values.scalar_type(), "_csr_to_block_csr_cpu", [&] {
-        _csr_to_block_csr_cpu_kernel<index_t, scalar_t> (
-            n_row, n_col, blocksize[0], blocksize[1],
+  int64_t blocknumel = blocksize[0] * blocksize[1];
+  // First we determine the number of blocks needed. For each given block, if it
+  // contains a non-zero element we will allocate values and indices for it.
+  int64_t num_blocks;
+  int64_t n_row = self.size(0);
+  int64_t n_col = self.size(1);
+  AT_DISPATCH_INDEX_TYPES(
+      input_crow_indices.scalar_type(), "_csr_to_block_csr_cpu", [&] {
+        num_blocks = csr_count_blocks<index_t>(
+            self.size(0),
+            self.size(1),
+            blocksize[0],
+            blocksize[1],
             input_crow_indices.data_ptr<index_t>(),
-            input_col_indices.data_ptr<index_t>(),
-            input_values.data_ptr<scalar_t>(),
-            result_crow_indices.data_ptr<index_t>(),
-            result_col_indices.data_ptr<index_t>(),
-            result_values.data_ptr<scalar_t>());
+            input_col_indices.data_ptr<index_t>());
       });
-    });
-    return at::native::_sparse_csr_tensor_unsafe(
+  Tensor result_values =
+      input_values.new_empty({num_blocks, blocksize[0], blocksize[1]});
+  Tensor result_crow_indices = input_crow_indices.new_empty(num_blocks + 1);
+  Tensor result_col_indices =
+      input_col_indices.new_empty({num_blocks, blocksize[0], blocksize[1]});
+  AT_DISPATCH_INDEX_TYPES(
+      input_crow_indices.scalar_type(), "_csr_to_block_csr_cpu", [&] {
+        AT_DISPATCH_FLOATING_TYPES(
+            input_values.scalar_type(), "_csr_to_block_csr_cpu", [&] {
+              _csr_to_block_csr_cpu_kernel<index_t, scalar_t>(
+                  n_row,
+                  n_col,
+                  blocksize[0],
+                  blocksize[1],
+                  input_crow_indices.data_ptr<index_t>(),
+                  input_col_indices.data_ptr<index_t>(),
+                  input_values.data_ptr<scalar_t>(),
+                  result_crow_indices.data_ptr<index_t>(),
+                  result_col_indices.data_ptr<index_t>(),
+                  result_values.data_ptr<scalar_t>());
+            });
+      });
+  return at::native::_sparse_csr_tensor_unsafe(
       result_crow_indices,
       result_col_indices,
       result_values,
@@ -772,66 +779,68 @@ Tensor _csr_to_block_csr_cpu(const Tensor& self, IntArrayRef blocksize) {
  *
  * Note:
  *   Input:  column indices *are not* assumed to be in sorted order or unique
- *   Output: the block column (unsorted) orders, duplicates, 
+ *   Output: the block column (unsorted) orders, duplicates,
  *           and explicit zeros are preserved
  *
  */
 template <class I, class T>
-void _block_csr_to_csr_cpu_kernel(const I n_brow,
-                                  const I n_bcol,
-                                  const I R, const I C,
-                                  const I Ap[],
-                                  const I Aj[],
-                                  const T Ax[],
-                                        I Bp[],
-                                        I Bj[],
-                                        T Bx[])
-{
-    // number of elements per block
-    const I RC = R*C;
-    // nnz
-    const I nnz = Ap[n_brow] * RC;
-    // last element in Bp is always nnz
-    Bp[n_brow * R] = nnz;
-    // loop for block row
-    for(I brow = 0; brow < n_brow; brow++){
-        // size of block rows
-        const I brow_size = Ap[brow + 1] - Ap[brow];
-        // size of row in csr
-        const I row_size = C * brow_size;
-        // loop of rows inside block
-        for(I r = 0; r < R; r++){
-            // csr row number
-            const I row = R * brow + r;
-            Bp[row] = RC * Ap[brow] + r * row_size;
-            // loop for block column
-            // block index inside row as loop variable
-            for (I bjj = 0; bjj < brow_size; bjj++)
-            {
-                const I b_ind = Ap[brow] + bjj;
-                // block column number
-                const I bcol = Aj[b_ind];
-                // loop for columns inside block
-                for (I c = 0; c < C; c++)
-                {
-                    // bsr data index in Ax
-                    // Ax is in C order
-                    const I b_data_ind = RC * b_ind + C * r + c;
-                    // csr column number
-                    const I col = C * bcol + c;
-                    // csr data anc col index in Bj and Bx
-                    // start from Bp[row], offset by current bjj*C and c
-                    const I data_ind = Bp[row] + bjj * C + c;
-                    // assign col and data to Bj and Bx
-                    Bj[data_ind] = col;
-                    Bx[data_ind] = Ax[b_data_ind];
-                }
-            }
+void _block_csr_to_csr_cpu_kernel(
+    const I n_brow,
+    const I n_bcol,
+    const I R,
+    const I C,
+    const I Ap[],
+    const I Aj[],
+    const T Ax[],
+    I Bp[],
+    I Bj[],
+    T Bx[]) {
+  // number of elements per block
+  const I RC = R * C;
+  // nnz
+  const I nnz = Ap[n_brow] * RC;
+  // last element in Bp is always nnz
+  Bp[n_brow * R] = nnz;
+  // loop for block row
+  for (I brow = 0; brow < n_brow; brow++) {
+    // size of block rows
+    const I brow_size = Ap[brow + 1] - Ap[brow];
+    // size of row in csr
+    const I row_size = C * brow_size;
+    // loop of rows inside block
+    for (I r = 0; r < R; r++) {
+      // csr row number
+      const I row = R * brow + r;
+      Bp[row] = RC * Ap[brow] + r * row_size;
+      // loop for block column
+      // block index inside row as loop variable
+      for (I bjj = 0; bjj < brow_size; bjj++) {
+        const I b_ind = Ap[brow] + bjj;
+        // block column number
+        const I bcol = Aj[b_ind];
+        // loop for columns inside block
+        for (I c = 0; c < C; c++) {
+          // bsr data index in Ax
+          // Ax is in C order
+          const I b_data_ind = RC * b_ind + C * r + c;
+          // csr column number
+          const I col = C * bcol + c;
+          // csr data anc col index in Bj and Bx
+          // start from Bp[row], offset by current bjj*C and c
+          const I data_ind = Bp[row] + bjj * C + c;
+          // assign col and data to Bj and Bx
+          Bj[data_ind] = col;
+          Bx[data_ind] = Ax[b_data_ind];
         }
+      }
     }
+  }
 }
 
 Tensor _block_csr_to_csr_cpu(const Tensor& self) {
+  // Does not remove materialized zeros in output.
+  // A separate call to coalesce (or some equivalent)
+  // would be needed
   Tensor input_values = self.values().contiguous();
   Tensor input_crow_indices = self.crow_indices().contiguous();
   Tensor input_col_indices = self.col_indices().contiguous();
@@ -841,25 +850,28 @@ Tensor _block_csr_to_csr_cpu(const Tensor& self) {
   int64_t nnz = blocksize[0] * blocksize[1];
   int64_t n_brow = self.size(0) / blocksize[0];
   int64_t n_bcol = self.size(1) / blocksize[1];
-  nnz = nnz * input_crow_indices[input_crow_indices.numel() - 1].item<int64_t>();
+  nnz =
+      nnz * input_crow_indices[input_crow_indices.numel() - 1].item<int64_t>();
   Tensor result_values = input_values.new_empty({nnz});
   Tensor result_crow_indices = input_crow_indices.new_empty({self.size(0) + 1});
   Tensor result_col_indices = input_col_indices.new_empty({nnz});
-  AT_DISPATCH_INDEX_TYPES(input_crow_indices.scalar_type(), "_block_csr_to_csr_cpu", [&] {
-    AT_DISPATCH_FLOATING_TYPES(input_values.scalar_type(), "_block_csr_to_csr_cpu", [&] {
-      _block_csr_to_csr_cpu_kernel<index_t, scalar_t>(
-          n_brow,
-          n_bcol,
-          blocksize[0],
-          blocksize[1],
-          input_crow_indices.data_ptr<index_t>(),
-          input_col_indices.data_ptr<index_t>(),
-          input_values.data_ptr<scalar_t>(),
-          result_crow_indices.data_ptr<index_t>(),
-          result_col_indices.data_ptr<index_t>(),
-          result_values.data_ptr<scalar_t>());
-    });
-  });
+  AT_DISPATCH_INDEX_TYPES(
+      input_crow_indices.scalar_type(), "_block_csr_to_csr_cpu", [&] {
+        AT_DISPATCH_FLOATING_TYPES(
+            input_values.scalar_type(), "_block_csr_to_csr_cpu", [&] {
+              _block_csr_to_csr_cpu_kernel<index_t, scalar_t>(
+                  n_brow,
+                  n_bcol,
+                  blocksize[0],
+                  blocksize[1],
+                  input_crow_indices.data_ptr<index_t>(),
+                  input_col_indices.data_ptr<index_t>(),
+                  input_values.data_ptr<scalar_t>(),
+                  result_crow_indices.data_ptr<index_t>(),
+                  result_col_indices.data_ptr<index_t>(),
+                  result_values.data_ptr<scalar_t>());
+            });
+      });
   return self.clone();
 }
 
