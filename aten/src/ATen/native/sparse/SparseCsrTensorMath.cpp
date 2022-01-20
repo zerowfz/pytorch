@@ -748,7 +748,7 @@ Tensor _csr_to_block_csr_cpu(const Tensor& self, IntArrayRef blocksize) {
       input_col_indices.new_empty({num_blocks});
   AT_DISPATCH_INDEX_TYPES(
       input_crow_indices.scalar_type(), "_csr_to_block_csr_cpu", [&] {
-        AT_DISPATCH_FLOATING_TYPES(
+        AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES(
             input_values.scalar_type(), "_csr_to_block_csr_cpu", [&] {
               _csr_to_block_csr_cpu_kernel<index_t, scalar_t>(
                   n_row,
@@ -874,7 +874,7 @@ Tensor _block_csr_to_csr_cpu(const Tensor& self) {
   Tensor result_col_indices = input_col_indices.new_empty({nnz});
   AT_DISPATCH_INDEX_TYPES(
       input_crow_indices.scalar_type(), "_block_csr_to_csr_cpu", [&] {
-        AT_DISPATCH_FLOATING_TYPES(
+        AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES(
             input_values.scalar_type(), "_block_csr_to_csr_cpu", [&] {
               _block_csr_to_csr_cpu_kernel<index_t, scalar_t>(
                   n_brow,
