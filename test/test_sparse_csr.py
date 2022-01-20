@@ -559,7 +559,6 @@ class TestSparseCSR(TestCase):
         values = torch.tensor([2, 1, 6, 4, 10, 3, 5, 9, 8, 7], dtype=dtype, device=device)
         self.assertEqual(csr.values(), values)
 
-    @skipCPUIfNoMklSparse  # Not sure this is needed.
     @dtypes(torch.double)
     def test_csr_to_block_csr(self, device, dtype):
         t_dense = torch.arange(16).float().reshape(4, 4)
@@ -648,10 +647,13 @@ class TestSparseCSR(TestCase):
             for (m, n, k), block_size, noncontiguous in zip(itertools.product([1, 5], repeat=3), [1, 2, 3], [True, False]):
                 nnz = random.randint(0, m * k)
                 a = self.genSparseCSRTensor((m * block_size, k * block_size), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
-                # a_data = make_tensor((nnz, block_size, block_size), dtype=dtype, device=device)
-                # a_data = a_data.mT if noncontiguous else a_data   # Test column-major blocks
-                # a = torch._sparse_csr_tensor_unsafe(a.crow_indices(), a.col_indices(), a_data, (m * block_size, k * block_size))
-                a = torch.csr_to_block_csr(a, (block_size, block_size))
+                if a.device.type == 'cpu':
+                    # Conversion is currently only supported on CPU
+                    a = torch.csr_to_block_csr(a, (block_size, block_size))
+                else:
+                    a_data = make_tensor((nnz, block_size, block_size), dtype=dtype, device=device)
+                    a_data = a_data.mT if noncontiguous else a_data   # Test column-major blocks
+                    a = torch._sparse_csr_tensor_unsafe(a.crow_indices(), a.col_indices(), a_data, (m * block_size, k * block_size))
                 b = make_tensor((k * block_size, n * block_size), dtype=dtype, device=device, noncontiguous=noncontiguous)
                 c = make_tensor((m * block_size, n * block_size), dtype=dtype, device=device, noncontiguous=noncontiguous)
                 for op_b, op_out in itertools.product([True, False], repeat=2):

@@ -53,7 +53,7 @@ inline void _validate_sparse_csr_tensor_args(
       values.dim() == 1 || is_block_sparse,
       "values must have dim=1 or dim=3 but got values.dim()=",
       values.dim());
-  int64_t block_size[2];
+  int64_t blocksize[2];
   if (is_block_sparse) {
     TORCH_CHECK(
         values.device().type() == kCPU,
@@ -63,32 +63,32 @@ inline void _validate_sparse_csr_tensor_args(
         "but got ",
         values.device(),
         "instead.");
-    block_size[0] = values.size(1);
-    block_size[1] = values.size(2);
-    int64_t block_numel = block_size[0] * block_size[1];
+    blocksize[0] = values.size(1);
+    blocksize[1] = values.size(2);
+    int64_t block_numel = blocksize[0] * blocksize[1];
     TORCH_CHECK(
-        block_size[0] == block_size[1] && block_size[0] > 1,
+        blocksize[0] == blocksize[1] && blocksize[0] > 1,
         "For block sparse CSR Tensors (3-dim values) the ",
-        "blocks must be square and greater than 1.",
+        "blocks must be square and greater than 1. ",
         "Got (",
-        block_size[0],
+        blocksize[0],
         ", ",
-        block_size[1],
+        blocksize[1],
         ") instead.");
     TORCH_CHECK(
-        block_size[0] == block_size[1] && block_size[0] > 1,
+        blocksize[0] == blocksize[1] && blocksize[0] > 1,
         "Block sparse CSR Tensors must have a size that is an integral multiple of their block size.",
         "Got (",
         size[0],
         ", ",
         size[1],
         ") with block size (",
-        block_size[0],
+        blocksize[0],
         ", ",
-        block_size[1],
+        blocksize[1],
         ") instead.");
     TORCH_CHECK(
-        crow_indices.numel() == (size[0] / block_size[0] + 1),
+        crow_indices.numel() == (size[0] / blocksize[0] + 1),
         "crow_indices.numel() must be size(0) / size(1) + 1, but got: ",
         crow_indices.numel());
     TORCH_CHECK(
@@ -135,7 +135,7 @@ inline void _validate_sparse_csr_tensor_args(
           "col_indices.min() should be greater or equal to zero");
       if (is_block_sparse) {
         TORCH_CHECK(
-            (size[1] / block_size[0]) > col_indices.max().item<index_t>(),
+            (size[1] / blocksize[0]) > col_indices.max().item<index_t>(),
             "size(1) / values.size(0) should be greater than col_indices.max()");
       } else {
         TORCH_CHECK(

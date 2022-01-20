@@ -647,7 +647,8 @@ void _csr_to_block_csr_cpu_kernel(
           n_blks++;
         }
 
-        // Blocks should not be visited more than once. Why the addition?
+        // Specific blocks entries should not be visited more than once.
+        // Scipy code does an addition here. Why?
         *(blocks[block_j] + C * r + c) = input_values[jj];
       }
     }
@@ -688,12 +689,19 @@ I csr_count_blocks(
 }
 
 Tensor _csr_to_block_csr_cpu(const Tensor& self, IntArrayRef blocksize) {
+  TORCH_CHECK(
+      blocksize[0] == blocksize[1],
+      "blocks must be square and greater than 1. ",
+      "Got (",
+      blocksize[0],
+      ", ",
+      blocksize[1],
+      ") instead.");
   // Blocks must be square!
   Tensor input_values = self.values().contiguous();
   Tensor input_crow_indices = self.crow_indices().contiguous();
   Tensor input_col_indices = self.col_indices().contiguous();
 
-  int64_t blocknumel = blocksize[0] * blocksize[1];
   // First we determine the number of blocks needed. For each given block, if it
   // contains a non-zero element we will allocate values and indices for it.
   int64_t num_blocks;
@@ -702,18 +710,21 @@ Tensor _csr_to_block_csr_cpu(const Tensor& self, IntArrayRef blocksize) {
   AT_DISPATCH_INDEX_TYPES(
       input_crow_indices.scalar_type(), "_csr_to_block_csr_cpu", [&] {
         num_blocks = csr_count_blocks<index_t>(
-            self.size(0),
-            self.size(1),
+            n_row,
+            n_col,
             blocksize[0],
             blocksize[1],
             input_crow_indices.data_ptr<index_t>(),
             input_col_indices.data_ptr<index_t>());
       });
+
   Tensor result_values =
-      input_values.new_empty({num_blocks, blocksize[0], blocksize[1]});
-  Tensor result_crow_indices = input_crow_indices.new_empty({(n_row / blocksize[0]) + 1});
-  Tensor result_col_indices =
-      input_col_indices.new_empty({num_blocks});
+      input_values.new_zeros({num_blocks, blocksize[0], blocksize[1]});
+  Tensor result_crow_indices =
+      input_crow_indices.new_empty({(n_row / blocksize[0]) + 1});
+  Tensor result_col_indices = input_col_indices.new_empty({num_blocks});
+
+  // Next we copy over non-zero elements into the allocated blocks.
   AT_DISPATCH_INDEX_TYPES(
       input_crow_indices.scalar_type(), "_csr_to_block_csr_cpu", [&] {
         AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES(
@@ -801,9 +812,6 @@ void _block_csr_to_csr_cpu_kernel(
 
 Tensor _block_csr_to_csr_cpu(const Tensor& self) {
   sparse_csr::_validate_sparse_csr_tensor_args(self, true);
-  // Does not remove materialized zeros in output.
-  // A separate call to coalesce (or some equivalent)
-  // would be needed
   Tensor input_values = self.values().contiguous();
   Tensor input_crow_indices = self.crow_indices().contiguous();
   Tensor input_col_indices = self.col_indices().contiguous();
@@ -815,6 +823,10 @@ Tensor _block_csr_to_csr_cpu(const Tensor& self) {
   int64_t n_bcol = self.size(1) / blocksize[1];
   nnz =
       nnz * input_crow_indices[input_crow_indices.numel() - 1].item<int64_t>();
+
+  // This does not remove materialized zeros in output.
+  // A separate call to coalesce (or some equivalent)
+  // would be needed.
   Tensor result_values = input_values.new_empty({nnz});
   Tensor result_crow_indices = input_crow_indices.new_empty({self.size(0) + 1});
   Tensor result_col_indices = input_col_indices.new_empty({nnz});
