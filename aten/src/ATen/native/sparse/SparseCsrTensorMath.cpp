@@ -855,6 +855,7 @@ void _block_csr_to_csr_cpu_kernel(
 }
 
 Tensor _block_csr_to_csr_cpu(const Tensor& self) {
+  sparse_csr::_validate_sparse_csr_tensor_args(self, true);
   // Does not remove materialized zeros in output.
   // A separate call to coalesce (or some equivalent)
   // would be needed
