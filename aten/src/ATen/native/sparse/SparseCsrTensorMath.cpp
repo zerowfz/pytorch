@@ -623,26 +623,41 @@ void _csr_to_block_csr_cpu_kernel(
     I* result_crow_indices,
     I* result_col_indices,
     T* result_values) {
+  // All blocks are possible, that is, may be allocated if a single non-zero
+  // value lives within them. Otherwise they're not.
+
+  // Allocate pointers for all possible column blocks plus 1
   std::vector<T*> blocks(n_col / C + 1, (T*)0);
 
   assert(n_row % R == 0);
   assert(n_col % C == 0);
 
+  // Major assumptions
+  // 1. Blocks must be square
+
+  // Number of blocks along rows
   I n_brow = n_row / R;
+  // Number of blocks along columns
   // I n_bcol = n_col / C;
 
+  // Number of elements per block
   I RC = R * C;
+  // Number of blocks overall
   I n_blks = 0;
 
   result_crow_indices[0] = 0;
 
+  // Iterate over blocks along rows
   for (I block_i = 0; block_i < n_brow; block_i++) {
+    // Iterate over rows within block
     for (I r = 0; r < R; r++) {
       I i = R * block_i + r; // row index
       for (I jj = input_crow_indices[i]; jj < input_crow_indices[i + 1]; jj++) {
         I j = input_col_indices[jj]; // column index
 
+        // Block corresponding to column index
         I block_j = j / C;
+        // Column within block
         I c = j % C;
 
         if (blocks[block_j] == 0) {
@@ -651,7 +666,8 @@ void _csr_to_block_csr_cpu_kernel(
           n_blks++;
         }
 
-        *(blocks[block_j] + C * r + c) += input_values[jj];
+        // Blocks should not be visited more than once. Why the addition?
+        *(blocks[block_j] + C * r + c) = input_values[jj];
       }
     }
 
@@ -704,6 +720,7 @@ I csr_count_blocks(
 }
 
 Tensor _csr_to_block_csr_cpu(const Tensor& self, IntArrayRef blocksize) {
+  // Blocks must be square!
   Tensor input_values = self.values().contiguous();
   Tensor input_crow_indices = self.crow_indices().contiguous();
   Tensor input_col_indices = self.col_indices().contiguous();
@@ -726,9 +743,9 @@ Tensor _csr_to_block_csr_cpu(const Tensor& self, IntArrayRef blocksize) {
       });
   Tensor result_values =
       input_values.new_empty({num_blocks, blocksize[0], blocksize[1]});
-  Tensor result_crow_indices = input_crow_indices.new_empty(num_blocks + 1);
+  Tensor result_crow_indices = input_crow_indices.new_empty({(n_row / blocksize[0]) + 1});
   Tensor result_col_indices =
-      input_col_indices.new_empty({num_blocks, blocksize[0], blocksize[1]});
+      input_col_indices.new_empty({num_blocks});
   AT_DISPATCH_INDEX_TYPES(
       input_crow_indices.scalar_type(), "_csr_to_block_csr_cpu", [&] {
         AT_DISPATCH_FLOATING_TYPES(
