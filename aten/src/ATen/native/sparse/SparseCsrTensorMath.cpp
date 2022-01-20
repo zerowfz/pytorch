@@ -589,27 +589,8 @@ TORCH_IMPL_FUNC(_convert_indices_from_csr_to_coo_structured_cpu) (
 }
 
 /*
- * Convert a CSR matrix to BSR format
- *
- * Input Arguments:
- *   I  n_row           - number of rows in A
- *   I  n_col           - number of columns in A
- *   I  R               - row blocksize
- *   I  C               - column blocksize
- *   I  Ap[n_row+1]     - row pointer
- *   I  Aj[nnz(A)]      - column indices
- *   T  Ax[nnz(A)]      - nonzero values
- *
- * Output Arguments:
- *   I  Bp[n_row/R + 1] - block row pointer
- *   I  Bj[nnz(B)]      - column indices
- *   T  Bx[nnz(B)]      - nonzero blocks
- *
- * Note:
- *   Complexity: Linear
- *   Output arrays must be preallocated (with Bx initialized to zero)
- *
- *
+ * Based on
+ * https://github.com/scipy/scipy/blob/8a64c938ddf1ae4c02a08d2c5e38daeb8d061d38/scipy/sparse/sparsetools/csr.h
  */
 template <class I, class T>
 void _csr_to_block_csr_cpu_kernel(
@@ -680,21 +661,8 @@ void _csr_to_block_csr_cpu_kernel(
 }
 
 /*
- * Compute the number of occupied RxC blocks in a matrix
- *
- * Input Arguments:
- *   I  n_row         - number of rows in A
- *   I  R             - row blocksize
- *   I  C             - column blocksize
- *   I  Ap[n_row+1]   - row pointer
- *   I  Aj[nnz(A)]    - column indices
- *
- * Output Arguments:
- *   I  num_blocks    - number of blocks
- *
- * Note:
- *   Complexity: Linear
- *
+ * Based on
+ * https://github.com/scipy/scipy/blob/8a64c938ddf1ae4c02a08d2c5e38daeb8d061d38/scipy/sparse/sparsetools/csr.h
  */
 template <class I>
 I csr_count_blocks(
@@ -774,31 +742,8 @@ Tensor _csr_to_block_csr_cpu(const Tensor& self, IntArrayRef blocksize) {
 }
 
 /*
- * Compute B = A for BSR matrix A, CSR matrix B
- *
- * Input Arguments:
- *   I  n_brow          - number of block rows in A
- *   I  n_bcol          - number of block columns in A
- *   I  R               - row blocksize
- *   I  C               - column blocksize
- *   I  Ap[n_brow+1]    - block row pointer
- *   I  Aj[nnz(A)]      - block column indices
- *   T  Ax[nnz(A)]      - nonzero blocks
- *
- * Output Arguments:
- *   I  Bp[n_brow*R + 1]- row pointer
- *   I  Bj[nnz(B)]      - column indices
- *   T  Bx[nnz(B)]      - nonzero values
- *
- * Note:
- *   Complexity: Linear. Specifically O(nnz(A) + max(n_row,n_col))
- *   Output arrays must be preallocated
- *
- * Note:
- *   Input:  column indices *are not* assumed to be in sorted order or unique
- *   Output: the block column (unsorted) orders, duplicates,
- *           and explicit zeros are preserved
- *
+ * Based on
+ * https://github.com/scipy/scipy/blob/8a64c938ddf1ae4c02a08d2c5e38daeb8d061d38/scipy/sparse/sparsetools/bsr.h
  */
 template <class I, class T>
 void _block_csr_to_csr_cpu_kernel(
