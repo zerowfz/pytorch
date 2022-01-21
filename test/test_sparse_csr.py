@@ -563,19 +563,30 @@ class TestSparseCSR(TestCase):
     @unittest.skipIf(not TEST_SCIPY, "SciPy not found")
     def test_csr_to_block_csr(self, device, dtype):
         for index_dtype in [torch.int32, torch.int64]:
-            m = 2
-            k = 2
-            for block_size in [2, 4]:
-                nnz = random.randint(0, m * k * block_size * block_size)
-                t = self.genSparseCSRTensor((m * block_size, k * block_size), nnz, dtype=dtype,
+            m = 24
+            k = 24
+            # Blocks have to symmetric for now.
+            for blocksize in [2, 4, 6]:
+                nnz = random.randint(0, m * k * blocksize * blocksize)
+                t = self.genSparseCSRTensor((m * blocksize, k * blocksize), nnz, dtype=dtype,
                                             device=device, index_dtype=index_dtype)
                 st = sp.csr_matrix((t.values(), t.col_indices(), t.crow_indices()), shape=tuple(t.size()))
-                block_t = torch.csr_to_block_csr(t, (block_size, block_size))
+                block_t = torch._csr_to_block_csr(t, (blocksize, blocksize))
                 self.assertEqual(block_t.values().dim(), 3)
-                block_st = st.tobsr(blocksize=(block_size, block_size))
+                block_st = st.tobsr(blocksize=(blocksize, blocksize))
                 self.assertEqual(block_t.values(), torch.tensor(block_st.data))
                 self.assertEqual(block_t.col_indices(), torch.tensor(block_st.indices).to(index_dtype))
                 self.assertEqual(block_t.crow_indices(), torch.tensor(block_st.indptr).to(index_dtype))
+
+                # NOTE: block_t_csr is not necessarily equal to the original t
+                # tocsr does not remove materialized zeros
+                # That's why we need to construct a comparison point via scipy again
+                block_st_csr = block_st.tocsr()
+                block_t_csr = torch._block_csr_to_csr(block_t)
+
+                self.assertEqual(block_t_csr.values(), torch.tensor(block_st_csr.data))
+                self.assertEqual(block_t_csr.col_indices(), torch.tensor(block_st_csr.indices).to(index_dtype))
+                self.assertEqual(block_t_csr.crow_indices(), torch.tensor(block_st_csr.indptr).to(index_dtype))
 
     @dtypes(*get_all_dtypes())
     def test_sparse_csr_from_dense_convert_error(self, device, dtype):
@@ -653,7 +664,7 @@ class TestSparseCSR(TestCase):
                 a = self.genSparseCSRTensor((m * block_size, k * block_size), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
                 if a.device.type == 'cpu':
                     # Conversion is currently only supported on CPU
-                    a = torch.csr_to_block_csr(a, (block_size, block_size))
+                    a = torch._csr_to_block_csr(a, (block_size, block_size))
                 else:
                     a_data = make_tensor((nnz, block_size, block_size), dtype=dtype, device=device)
                     a_data = a_data.mT if noncontiguous else a_data   # Test column-major blocks
