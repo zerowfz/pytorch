@@ -7,7 +7,7 @@ import unittest
 from torch.testing import get_all_complex_dtypes, get_all_fp_dtypes, floating_and_complex_types, make_tensor
 from torch.testing._internal.common_cuda import SM53OrLater, SM80OrLater, TEST_CUSPARSE_GENERIC
 from torch.testing._internal.common_utils import \
-    (TEST_WITH_ROCM, TEST_SCIPY, TestCase, run_tests, load_tests, coalescedonoff, blocksizes)
+    (TEST_WITH_ROCM, TEST_SCIPY, TestCase, run_tests, load_tests, coalescedonoff)
 from torch.testing._internal.common_device_type import \
     (ops, instantiate_device_type_tests, dtypes, dtypesIfCUDA, onlyCPU, onlyCUDA, skipCUDAIfNoCusparseGeneric,
      precisionOverride, skipMeta, skipCUDAIf, skipCUDAIfRocm, skipCPUIfNoMklSparse)
@@ -561,17 +561,24 @@ class TestSparseCSR(TestCase):
 
     @dtypes(torch.double)
     def test_csr_to_block_csr(self, device, dtype):
-        t_dense = torch.arange(16).float().reshape(4, 4)
-        print(t_dense)
-        t = t_dense.to_sparse_csr()
-        print(t)
-        block_t = torch.csr_to_block_csr(t, (2, 2))
-        print(block_t)
-        print(block_t.values().size())
-        self.assertEqual(block_t.values().dim(), 3)
-        t0 = torch.block_csr_to_csr(block_t)
-        print(t0)
-        pass
+        for index_dtype in [torch.int32, torch.int64]:
+            m = 2
+            k = 2
+            for block_size in [2, 4]:
+                nnz = random.randint(0, m * k * block_size * block_size)
+                print("nnz: ", nnz)
+                print("m: ", m)
+                print("k: ", k)
+                print("block_size: ", block_size)
+                t = self.genSparseCSRTensor((m * block_size, k * block_size), nnz, dtype=dtype,
+                                            device=device, index_dtype=index_dtype)
+                print(t.size())
+                block_t = torch.csr_to_block_csr(t, (block_size, block_size))
+                self.assertEqual(block_t.values().dim(), 3)
+                t0 = torch.block_csr_to_csr(block_t)
+                print(t)
+                print(t0)
+                self.assertEqual(t, t0)
 
     @dtypes(*get_all_dtypes())
     def test_sparse_csr_from_dense_convert_error(self, device, dtype):
