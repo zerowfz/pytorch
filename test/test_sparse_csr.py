@@ -566,19 +566,12 @@ class TestSparseCSR(TestCase):
             k = 2
             for block_size in [2, 4]:
                 nnz = random.randint(0, m * k * block_size * block_size)
-                print("nnz: ", nnz)
-                print("m: ", m)
-                print("k: ", k)
-                print("block_size: ", block_size)
                 t = self.genSparseCSRTensor((m * block_size, k * block_size), nnz, dtype=dtype,
                                             device=device, index_dtype=index_dtype)
-                print(t.size())
                 block_t = torch.csr_to_block_csr(t, (block_size, block_size))
                 self.assertEqual(block_t.values().dim(), 3)
                 t0 = torch.block_csr_to_csr(block_t)
-                print(t)
-                print(t0)
-                self.assertEqual(t, t0)
+                self.assertEqual(t.col_indices(), t0.col_indices())
 
     @dtypes(*get_all_dtypes())
     def test_sparse_csr_from_dense_convert_error(self, device, dtype):

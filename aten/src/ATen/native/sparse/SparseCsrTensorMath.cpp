@@ -847,7 +847,14 @@ Tensor _block_csr_to_csr_cpu(const Tensor& self) {
                   result_values.data_ptr<scalar_t>());
             });
       });
-  return self.clone();
+  return at::native::_sparse_csr_tensor_unsafe(
+      result_crow_indices,
+      result_col_indices,
+      result_values,
+      self.sizes(),
+      result_values.scalar_type(),
+      self.layout(),
+      result_values.device());
 }
 
 } // namespace native
