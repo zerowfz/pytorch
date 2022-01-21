@@ -560,6 +560,7 @@ class TestSparseCSR(TestCase):
         self.assertEqual(csr.values(), values)
 
     @dtypes(torch.double)
+    @unittest.skipIf(not TEST_SCIPY, "SciPy not found")
     def test_csr_to_block_csr(self, device, dtype):
         for index_dtype in [torch.int32, torch.int64]:
             m = 2
@@ -568,10 +569,13 @@ class TestSparseCSR(TestCase):
                 nnz = random.randint(0, m * k * block_size * block_size)
                 t = self.genSparseCSRTensor((m * block_size, k * block_size), nnz, dtype=dtype,
                                             device=device, index_dtype=index_dtype)
+                st = sp.csr_matrix((t.values(), t.col_indices(), t.crow_indices()), shape=tuple(t.size()))
                 block_t = torch.csr_to_block_csr(t, (block_size, block_size))
                 self.assertEqual(block_t.values().dim(), 3)
-                t0 = torch.block_csr_to_csr(block_t)
-                self.assertEqual(t.col_indices(), t0.col_indices())
+                block_st = st.tobsr(blocksize=(block_size, block_size))
+                self.assertEqual(block_t.values(), torch.tensor(block_st.data))
+                self.assertEqual(block_t.col_indices(), torch.tensor(block_st.indices).to(index_dtype))
+                self.assertEqual(block_t.crow_indices(), torch.tensor(block_st.indptr).to(index_dtype))
 
     @dtypes(*get_all_dtypes())
     def test_sparse_csr_from_dense_convert_error(self, device, dtype):

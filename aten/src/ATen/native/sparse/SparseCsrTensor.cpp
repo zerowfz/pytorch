@@ -133,7 +133,7 @@ void _validate_sparse_csr_tensor_args(
         crow_indices_accessor[crow_indices.numel() - 1] == col_indices.numel(),
         "last value of crow_indices should be equal to the length of col_indices.");
 
-    for (int i = 1; i <= size[0]; i++) {
+    for (int i = 1; i <= crow_indices.numel() - 1; i++) {
       TORCH_CHECK(
           crow_indices_accessor[i - 1] <= crow_indices_accessor[i],
           "at position i = ",
