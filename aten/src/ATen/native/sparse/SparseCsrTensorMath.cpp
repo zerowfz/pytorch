@@ -811,10 +811,11 @@ void _block_csr_to_csr_cpu_kernel(
 }
 
 Tensor _block_csr_to_csr_cpu(const Tensor& self) {
-  sparse_csr::_validate_sparse_csr_tensor_args(self, true);
   Tensor input_values = self.values().contiguous();
   Tensor input_crow_indices = self.crow_indices().contiguous();
   Tensor input_col_indices = self.col_indices().contiguous();
+  at::native::_validate_sparse_csr_tensor_args(
+      input_crow_indices, input_col_indices, input_values, self.sizes(), true);
   int64_t blocksize[2];
   blocksize[0] = input_values.size(1);
   blocksize[1] = input_values.size(2);
