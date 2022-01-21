@@ -20,12 +20,7 @@ namespace {
 
 } // end anonymous namespace
 
-void _validate_sparse_csr_tensor_args(
-    const Tensor& crow_indices,
-    const Tensor& col_indices,
-    const Tensor& values,
-    IntArrayRef size,
-    c10::optional<bool> is_block_sparse_) {
+void _validate_sparse_csr_tensor_args(const Tensor& crow_indices, const Tensor& col_indices, const Tensor& values, IntArrayRef size) {
   // Layout Invariants
   TORCH_CHECK(
       col_indices.layout() == kStrided && col_indices.is_contiguous(),
@@ -52,75 +47,21 @@ void _validate_sparse_csr_tensor_args(
       col_indices.dim() == 1,
       "col_indices must have dim=1 but got col_indices.dim()=",
       col_indices.dim());
-
-  bool is_block_sparse;
-  if (is_block_sparse_) {
-    is_block_sparse = *is_block_sparse_;
-  } else {
-    is_block_sparse = (values.dim() == 3);
-  }
-
-  int64_t blocksize[2];
-  if (is_block_sparse) {
-    TORCH_CHECK(
-        values.device().type() == kCPU,
-        "device type of blocksparse values (",
-        values.device().type(),
-        ") must be CPU ",
-        "but got ",
-        values.device(),
-        "instead.");
-    blocksize[0] = values.size(1);
-    blocksize[1] = values.size(2);
-    int64_t block_numel = blocksize[0] * blocksize[1];
-    TORCH_CHECK(
-        blocksize[0] == blocksize[1] && blocksize[0] > 1,
-        "For block sparse CSR Tensors (3-dim values) the ",
-        "blocks must be square and greater than 1. ",
-        "Got (",
-        blocksize[0],
-        ", ",
-        blocksize[1],
-        ") instead.");
-    TORCH_CHECK(
-        blocksize[0] == blocksize[1] && blocksize[0] > 1,
-        "Block sparse CSR Tensors must have a size that is an integral multiple of their block size.",
-        "Got (",
-        size[0],
-        ", ",
-        size[1],
-        ") with block size (",
-        blocksize[0],
-        ", ",
-        blocksize[1],
-        ") instead.");
-    TORCH_CHECK(
-        crow_indices.numel() == (size[0] / blocksize[0] + 1),
-        "crow_indices.numel() must be size(0) / size(1) + 1, but got: ",
-        crow_indices.numel());
-    TORCH_CHECK(
-        col_indices.numel() == values.size(0),
-        "col_indices and values leading size must have be equal, but got col_indices.numel(): ",
-        col_indices.numel(),
-        ", values.size(0): ",
-        values.size(0));
-  } else {
-    TORCH_CHECK(
-        values.dim() == 1,
-        "values must have dim=1 but got values.dim()=",
-        values.dim());
-    // Note, this check also enforces `crow_indices.numel() >= 1`
-    TORCH_CHECK(
-        crow_indices.numel() == (size[0] + 1),
-        "crow_indices.numel() must be size(0) + 1, but got: ",
-        crow_indices.numel());
-    TORCH_CHECK(
-        col_indices.numel() == values.numel(),
-        "col_indices and values must have equal sizes, but got col_indices.numel(): ",
-        col_indices.numel(),
-        ", values.numel(): ",
-        values.numel());
-  }
+  TORCH_CHECK(
+      values.dim() == 1,
+      "values must have dim=1 but got values.dim()=",
+      values.dim());
+  // Note, this check also enforces `crow_indices.numel() >= 1`
+  TORCH_CHECK(
+      crow_indices.numel() == (size[0] + 1),
+      "crow_indices.numel() must be size(0) + 1, but got: ",
+      crow_indices.numel());
+  TORCH_CHECK(
+      col_indices.numel() == values.numel(),
+      "col_indices and values must have equal sizes, but got col_indices.numel(): ",
+      col_indices.numel(),
+      ", values.numel(): ",
+      values.numel());
 
   // Indices invariants
   AT_DISPATCH_INDEX_TYPES(crow_indices.scalar_type(), "csr_construct_check", [&] {
@@ -133,26 +74,14 @@ void _validate_sparse_csr_tensor_args(
         crow_indices_accessor[crow_indices.numel() - 1] == col_indices.numel(),
         "last value of crow_indices should be equal to the length of col_indices.");
 
-    for (int i = 1; i <= crow_indices.numel() - 1; i++) {
+    for (int i =  1; i <= size[0]; i++) {
       TORCH_CHECK(
           crow_indices_accessor[i - 1] <= crow_indices_accessor[i],
-          "at position i = ",
-          i,
-          ", this condition crow_indices[i - 1] <= crow_indices[i] fails");
+          "at position i = ", i, ", this condition crow_indices[i - 1] <= crow_indices[i] fails");
     }
     if (col_indices.numel() > 0) {
-      TORCH_CHECK(
-          0 <= col_indices.min().item<index_t>(),
-          "col_indices.min() should be greater or equal to zero");
-      if (is_block_sparse) {
-        TORCH_CHECK(
-            (size[1] / blocksize[0]) > col_indices.max().item<index_t>(),
-            "size(1) / values.size(1) should be greater than col_indices.max()");
-      } else {
-        TORCH_CHECK(
-            size[1] > col_indices.max().item<index_t>(),
-            "size(1) should be greater than col_indices.max()");
-      }
+      TORCH_CHECK(0 <= col_indices.min().item<index_t>(), "col_indices.min() should be greater or equal to zero");
+      TORCH_CHECK(size[1] > col_indices.max().item<index_t>(), "size(1) should be greater than col_indices.max()");
     }
   });
 

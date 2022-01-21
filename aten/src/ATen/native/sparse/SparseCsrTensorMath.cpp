@@ -690,14 +690,27 @@ I csr_count_blocks(
 
 Tensor _csr_to_block_csr_cpu(const Tensor& self, IntArrayRef blocksize) {
   TORCH_CHECK(
-      blocksize[0] == blocksize[1],
+      blocksize[0] == blocksize[1] && blocksize[0] > 1,
       "blocks must be square and greater than 1. ",
       "Got (",
       blocksize[0],
       ", ",
       blocksize[1],
       ") instead.");
-  // Blocks must be square!
+  TORCH_CHECK(
+      self.size(0) % blocksize[0] == 0 &&
+      self.size(1) % blocksize[1] == 0,
+      "Block sparse CSR Tensors must have a size that is an ",
+      "integral multiple of their block size. ",
+      "Got Tensor of size (",
+      self.size(0),
+      ", ",
+      self.size(1),
+      ") with block size (",
+      blocksize[0],
+      ", ",
+      blocksize[1],
+      ") instead.");
   Tensor input_values = self.values().contiguous();
   Tensor input_crow_indices = self.crow_indices().contiguous();
   Tensor input_col_indices = self.col_indices().contiguous();
@@ -814,8 +827,10 @@ Tensor _block_csr_to_csr_cpu(const Tensor& self) {
   Tensor input_values = self.values().contiguous();
   Tensor input_crow_indices = self.crow_indices().contiguous();
   Tensor input_col_indices = self.col_indices().contiguous();
-  at::native::_validate_sparse_csr_tensor_args(
-      input_crow_indices, input_col_indices, input_values, self.sizes(), true);
+  TORCH_CHECK(
+      input_values.dim() == 3,
+      "Input Tensor must be in block sparse CSR format. Got regular CSR instead.");
+
   int64_t blocksize[2];
   blocksize[0] = input_values.size(1);
   blocksize[1] = input_values.size(2);

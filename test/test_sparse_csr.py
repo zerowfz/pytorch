@@ -588,6 +588,22 @@ class TestSparseCSR(TestCase):
                 self.assertEqual(block_t_csr.col_indices(), torch.tensor(block_st_csr.indices).to(index_dtype))
                 self.assertEqual(block_t_csr.crow_indices(), torch.tensor(block_st_csr.indptr).to(index_dtype))
 
+    @dtypes(torch.double)
+    @unittest.skipIf(not TEST_SCIPY, "SciPy not found")
+    def test_csr_to_block_csr_errors(self, device, dtype):
+        for index_dtype in [torch.int32, torch.int64]:
+            nnz = 15
+            t = self.genSparseCSRTensor((16, 16), nnz, dtype=dtype,
+                                        device=device, index_dtype=index_dtype)
+            with self.assertRaisesRegex(RuntimeError, "must be square and greater than 1."):
+                block_t = torch._csr_to_block_csr(t, (2, 3))
+
+            with self.assertRaisesRegex(RuntimeError, "must be square and greater than 1."):
+                block_t = torch._csr_to_block_csr(t, (1, 1))
+
+            with self.assertRaisesRegex(RuntimeError, r"size \(16, 16\) with block size \(5, 5\)"):
+                block_t = torch._csr_to_block_csr(t, (5, 5))
+
     @dtypes(*get_all_dtypes())
     def test_sparse_csr_from_dense_convert_error(self, device, dtype):
         size = (4, 2, 4)
