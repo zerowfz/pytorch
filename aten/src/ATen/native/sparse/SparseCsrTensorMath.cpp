@@ -653,7 +653,9 @@ void _csr_to_block_csr_cpu_kernel(
       }
     }
 
-    for (I jj = input_crow_indices[R * block_i]; jj < input_crow_indices[R * (block_i + 1)]; jj++) {
+    for (I jj = input_crow_indices[R * block_i];
+         jj < input_crow_indices[R * (block_i + 1)];
+         jj++) {
       blocks[input_col_indices[jj] / C] = 0;
     }
 
@@ -698,8 +700,7 @@ Tensor _csr_to_block_csr_cpu(const Tensor& self, IntArrayRef blocksize) {
       blocksize[1],
       ") instead.");
   TORCH_CHECK(
-      self.size(0) % blocksize[0] == 0 &&
-      self.size(1) % blocksize[1] == 0,
+      self.size(0) % blocksize[0] == 0 && self.size(1) % blocksize[1] == 0,
       "Block sparse CSR Tensors must have a size that is an ",
       "integral multiple of their block size. ",
       "Got Tensor of size (",
