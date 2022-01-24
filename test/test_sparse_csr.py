@@ -677,7 +677,7 @@ class TestSparseCSR(TestCase):
         for index_dtype in [torch.int32, torch.int64]:
             for (m, n, k), block_size, noncontiguous in zip(itertools.product([1, 5], repeat=3), [1, 2, 3], [True, False]):
                 nnz = random.randint(0, m * k)
-                if device == 'cpu' and not noncontiguous:
+                if noncontiguous and block_size > 1:
                     # Conversion is currently only supported on CPU
                     a = self.genSparseCSRTensor((m * block_size, k * block_size), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
                     a = torch._csr_to_block_csr(a, (block_size, block_size))
@@ -701,7 +701,7 @@ class TestSparseCSR(TestCase):
                 block_sizes = [2, 3]
             for (m, k), block_size, noncontiguous in zip(itertools.product([1, 5], repeat=2), block_sizes, [True, False]):
                 nnz = random.randint(0, m * k)
-                if device == 'cpu' and not noncontiguous:
+                if noncontiguous and block_size > 1:
                     # Conversion is currently only supported on CPU
                     a = self.genSparseCSRTensor((m * block_size, k * block_size), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
                     a = torch._csr_to_block_csr(a, (block_size, block_size))
@@ -756,7 +756,7 @@ class TestSparseCSR(TestCase):
         for index_dtype in [torch.int32, torch.int64]:
             for (m, k), block_size, noncontiguous in zip(itertools.product([1, 5], repeat=2), [2, 3], [True, False]):
                 nnz = random.randint(0, m * m)
-                if device == 'cpu' and not noncontiguous:
+                if noncontiguous and block_size > 1:
                     # Conversion is currently only supported on CPU
                     a = self.genSparseCSRTensor((m * block_size, m * block_size), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
                     a = torch._csr_to_block_csr(a, (block_size, block_size))

@@ -8540,6 +8540,7 @@
 - func: _csr_to_block_csr(Tensor self, int[2] block_size) -> Tensor
   dispatch:
     SparseCsrCPU: _csr_to_block_csr_cpu
+    SparseCsrCUDA: _csr_to_block_csr_cuda
 
 - func: _block_csr_to_csr(Tensor self) -> Tensor
   dispatch:
