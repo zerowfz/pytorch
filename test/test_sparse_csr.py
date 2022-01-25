@@ -7,7 +7,7 @@ import unittest
 from torch.testing import get_all_complex_dtypes, get_all_fp_dtypes, floating_and_complex_types, make_tensor
 from torch.testing._internal.common_cuda import SM53OrLater, SM80OrLater, TEST_CUSPARSE_GENERIC
 from torch.testing._internal.common_utils import \
-    (TEST_WITH_ROCM, TEST_SCIPY, TestCase, run_tests, load_tests, coalescedonoff)
+    (TEST_WITH_ROCM, TEST_SCIPY, TestCase, run_tests, load_tests, coalescedonoff, parametrize)
 from torch.testing._internal.common_device_type import \
     (ops, instantiate_device_type_tests, dtypes, dtypesIfCUDA, onlyCPU, onlyCUDA, skipCUDAIfNoCusparseGeneric,
      precisionOverride, skipMeta, skipCUDAIf, skipCUDAIfRocm, skipCPUIfNoMklSparse)
@@ -559,20 +559,24 @@ class TestSparseCSR(TestCase):
         values = torch.tensor([2, 1, 6, 4, 10, 3, 5, 9, 8, 7], dtype=dtype, device=device)
         self.assertEqual(csr.values(), values)
 
+    @parametrize("seed", [1, 12, 123, 1234])
+    @parametrize("blocksize", [2, 4, 8])
+    @parametrize("nnz", list(range(24 * 24)))
     @dtypes((torch.double, torch.int32), (torch.double, torch.int64))
     @unittest.skipIf(not TEST_SCIPY, "SciPy not found")
     @onlyCPU
-    def test_csr_to_block_csr(self, device, dtypes):
+    def test_csr_to_block_csr(self, device, dtypes, nnz, blocksize, seed):
         dtype, index_dtype = dtypes
-        blocksize = 2
         m = 24
         k = 24
-        nnz = random.randint(0, m * k * blocksize * blocksize)
+        torch.manual_seed(seed)
         t = self.genSparseCSRTensor((m * blocksize, k * blocksize), nnz, dtype=dtype,
                                     device=device, index_dtype=index_dtype)
         st = sp.csr_matrix((t.values(), t.col_indices(), t.crow_indices()), shape=tuple(t.size()))
         block_t = torch._csr_to_block_csr(t, (blocksize, blocksize))
         self.assertEqual(block_t.values().dim(), 3)
+        # print('block_t.values().sum(): ', block_t.values().sum())
+        # break
         block_st = st.tobsr(blocksize=(blocksize, blocksize))
         self.assertEqual(block_t.values(), torch.tensor(block_st.data))
         self.assertEqual(block_t.col_indices(), torch.tensor(block_st.indices).to(index_dtype))
