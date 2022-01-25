@@ -8542,11 +8542,6 @@
     SparseCsrCPU: _csr_to_block_csr_cpu
     SparseCsrCUDA: _csr_to_block_csr_cuda
 
-- func: _block_csr_to_csr(Tensor self) -> Tensor
-  dispatch:
-    SparseCsrCPU: _block_csr_to_csr_cpu
-    SparseCsrCUDA: _block_csr_to_csr_cuda
-
 ## NN wrappers
 
 - func: mse_loss.out(Tensor self, Tensor target, int reduction=Mean, *, Tensor(a!) out) -> Tensor(a!)

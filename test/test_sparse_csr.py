@@ -559,17 +559,15 @@ class TestSparseCSR(TestCase):
         values = torch.tensor([2, 1, 6, 4, 10, 3, 5, 9, 8, 7], dtype=dtype, device=device)
         self.assertEqual(csr.values(), values)
 
-    @parametrize("seed", [1, 12, 123])
-    @parametrize("blocksize", [2, 4, 8])
-    @parametrize("nnz", [0, 12 * 24, 24 * 24])
+    @parametrize("blocksize", [2, 8])
+    @parametrize("shape", [(24, 24), (12, 24)])
     @dtypes((torch.double, torch.int32), (torch.double, torch.int64))
     @unittest.skipIf(not TEST_SCIPY, "SciPy not found")
     @skipMeta
-    def test_csr_to_block_csr(self, device, dtypes, nnz, blocksize, seed):
+    def test_csr_to_block_csr(self, device, dtypes, shape, blocksize):
         dtype, index_dtype = dtypes
-        m = 24
-        k = 24
-        torch.manual_seed(seed)
+        m, k = shape
+        nnz = random.randint(0, m * k)
         t = self.genSparseCSRTensor((m * blocksize, k * blocksize), nnz, dtype=dtype,
                                     device=device, index_dtype=index_dtype)
         st = sp.csr_matrix((t.values().cpu(), t.col_indices().cpu(), t.crow_indices().cpu()), shape=tuple(t.size()))
@@ -581,16 +579,6 @@ class TestSparseCSR(TestCase):
         self.assertEqual(block_t.values().cpu(), torch.tensor(block_st.data))
         self.assertEqual(block_t.col_indices().cpu(), torch.tensor(block_st.indices).to(index_dtype))
         self.assertEqual(block_t.crow_indices().cpu(), torch.tensor(block_st.indptr).to(index_dtype))
-
-        # NOTE: block_t_csr is not necessarily equal to the original t
-        # tocsr does not remove materialized zeros
-        # That's why we need to construct a comparison point via scipy again
-        block_st_csr = block_st.tocsr()
-        block_t_csr = torch._block_csr_to_csr(block_t)
-
-        self.assertEqual(block_t_csr.values().cpu(), torch.tensor(block_st_csr.data))
-        self.assertEqual(block_t_csr.col_indices().cpu(), torch.tensor(block_st_csr.indices).to(index_dtype))
-        self.assertEqual(block_t_csr.crow_indices().cpu(), torch.tensor(block_st_csr.indptr).to(index_dtype))
 
     @dtypes(torch.double)
     @unittest.skipIf(not TEST_SCIPY, "SciPy not found")
