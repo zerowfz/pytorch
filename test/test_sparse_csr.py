@@ -559,7 +559,6 @@ class TestSparseCSR(TestCase):
         values = torch.tensor([2, 1, 6, 4, 10, 3, 5, 9, 8, 7], dtype=dtype, device=device)
         self.assertEqual(csr.values(), values)
 
-    @parametrize("blocksize", [2, 8])
     @parametrize("shape", [(24, 24), (12, 24)])
     @dtypes((torch.double, torch.int32), (torch.double, torch.int64))
     @unittest.skipIf(not TEST_SCIPY, "SciPy not found")
@@ -662,49 +661,50 @@ class TestSparseCSR(TestCase):
         self.assertEqual(actual, out)
         self.assertEqual(actual, expected)
 
+    @parametrize("block_size", [1, 2, 3])
+    @parametrize("index_dtype", [torch.int32, torch.int64])
     @skipCPUIfNoMklSparse
     @unittest.skipIf(not TEST_SCIPY, "SciPy not found")
     @dtypes(torch.float32, torch.float64, torch.complex64, torch.complex128)
-    def test_block_addmm(self, device, dtype):
-        for index_dtype in [torch.int32, torch.int64]:
-            for (m, n, k), block_size, noncontiguous in zip(itertools.product([1, 5], repeat=3), [1, 2, 3], [True, False]):
-                nnz = random.randint(0, m * k)
-                if noncontiguous and block_size > 1:
-                    # Conversion is currently only supported on CPU
-                    a = self.genSparseCSRTensor((m * block_size, k * block_size), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
-                    a = torch._csr_to_block_csr(a, (block_size, block_size))
-                else:
-                    a = self.genSparseCSRTensor((m, k), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
-                    a_data = make_tensor((nnz, block_size, block_size), dtype=dtype, device=device)
-                    a_data = a_data.mT if noncontiguous else a_data   # Test column-major blocks
-                    a = torch._sparse_csr_tensor_unsafe(a.crow_indices(), a.col_indices(), a_data, (m * block_size, k * block_size))
-                b = make_tensor((k * block_size, n * block_size), dtype=dtype, device=device, noncontiguous=noncontiguous)
-                c = make_tensor((m * block_size, n * block_size), dtype=dtype, device=device, noncontiguous=noncontiguous)
-                for op_b, op_out in itertools.product([True, False], repeat=2):
-                    self.run_test_block_addmm_addmv(torch.addmm, c, a, b, op_b, op_out, dtype=dtype, device=device)
+    def test_block_addmm(self, device, dtype, index_dtype, block_size):
+        for (m, n, k), noncontiguous in zip(itertools.product([1, 5], repeat=3), [True, False]):
+            nnz = random.randint(0, m * k)
+            if noncontiguous and block_size > 1:
+                # Conversion is currently only supported on CPU
+                a = self.genSparseCSRTensor((m * block_size, k * block_size), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
+                a = torch._csr_to_block_csr(a, (block_size, block_size))
+            else:
+                a = self.genSparseCSRTensor((m, k), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
+                a_data = make_tensor((nnz, block_size, block_size), dtype=dtype, device=device)
+                a_data = a_data.mT if noncontiguous else a_data   # Test column-major blocks
+                a = torch._sparse_csr_tensor_unsafe(a.crow_indices(), a.col_indices(), a_data, (m * block_size, k * block_size))
+            b = make_tensor((k * block_size, n * block_size), dtype=dtype, device=device, noncontiguous=noncontiguous)
+            c = make_tensor((m * block_size, n * block_size), dtype=dtype, device=device, noncontiguous=noncontiguous)
+            for op_b, op_out in itertools.product([True, False], repeat=2):
+                self.run_test_block_addmm_addmv(torch.addmm, c, a, b, op_b, op_out, dtype=dtype, device=device)
 
+    @parametrize("block_size", [1, 2, 3])
+    @parametrize("index_dtype", [torch.int32, torch.int64])
     @skipCPUIfNoMklSparse
     @unittest.skipIf(not TEST_SCIPY, "SciPy not found")
     @dtypes(torch.float32, torch.float64, torch.complex64, torch.complex128)
-    def test_block_addmv(self, device, dtype):
-        for index_dtype in [torch.int32, torch.int64]:
-            block_sizes = [1, 2, 3]
-            if TEST_WITH_ROCM or not TEST_CUSPARSE_GENERIC:
-                block_sizes = [2, 3]
-            for (m, k), block_size, noncontiguous in zip(itertools.product([1, 5], repeat=2), block_sizes, [True, False]):
-                nnz = random.randint(0, m * k)
-                if noncontiguous and block_size > 1:
-                    # Conversion is currently only supported on CPU
-                    a = self.genSparseCSRTensor((m * block_size, k * block_size), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
-                    a = torch._csr_to_block_csr(a, (block_size, block_size))
-                else:
-                    a = self.genSparseCSRTensor((m, k), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
-                    a_data = make_tensor((nnz, block_size, block_size), dtype=dtype, device=device)
-                    a_data = a_data.mT if noncontiguous else a_data   # Test column-major blocks
-                    a = torch._sparse_csr_tensor_unsafe(a.crow_indices(), a.col_indices(), a_data, (m * block_size, k * block_size))
-                b = make_tensor((k * block_size,), dtype=dtype, device=device, noncontiguous=noncontiguous)
-                c = make_tensor((m * block_size,), dtype=dtype, device=device, noncontiguous=noncontiguous)
-                self.run_test_block_addmm_addmv(torch.addmv, c, a, b, dtype=dtype, device=device)
+    def test_block_addmv(self, device, dtype, index_dtype, block_size):
+        if (TEST_WITH_ROCM or not TEST_CUSPARSE_GENERIC) and block_size == 1:
+            return
+        for (m, k), noncontiguous in zip(itertools.product([1, 5], repeat=2), [True, False]):
+            nnz = random.randint(0, m * k)
+            if noncontiguous and block_size > 1:
+                # Conversion is currently only supported on CPU
+                a = self.genSparseCSRTensor((m * block_size, k * block_size), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
+                a = torch._csr_to_block_csr(a, (block_size, block_size))
+            else:
+                a = self.genSparseCSRTensor((m, k), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
+                a_data = make_tensor((nnz, block_size, block_size), dtype=dtype, device=device)
+                a_data = a_data.mT if noncontiguous else a_data   # Test column-major blocks
+                a = torch._sparse_csr_tensor_unsafe(a.crow_indices(), a.col_indices(), a_data, (m * block_size, k * block_size))
+            b = make_tensor((k * block_size,), dtype=dtype, device=device, noncontiguous=noncontiguous)
+            c = make_tensor((m * block_size,), dtype=dtype, device=device, noncontiguous=noncontiguous)
+            self.run_test_block_addmm_addmv(torch.addmv, c, a, b, dtype=dtype, device=device)
 
     @skipCPUIfNoMklSparse
     @skipCUDAIfRocm
