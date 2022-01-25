@@ -899,5 +899,30 @@ Tensor _csr_to_block_csr_cuda(const Tensor& self, IntArrayRef blocksize) {
       result_values.device());
 }
 
+Tensor _block_csr_to_csr_cuda(const Tensor& self) {
+  Tensor input_values = self.values().cpu();
+  Tensor input_crow_indices = self.crow_indices().cpu();
+  Tensor input_col_indices = self.col_indices().cpu();
+  Tensor cpu_result = _block_csr_to_csr_cpu(_sparse_csr_tensor_unsafe(
+      input_crow_indices,
+      input_col_indices,
+      input_values,
+      self.sizes(),
+      input_values.scalar_type(),
+      self.layout(),
+      input_values.device()));
+  Tensor result_values = cpu_result.values().cuda();
+  Tensor result_crow_indices = cpu_result.crow_indices().cuda();
+  Tensor result_col_indices = cpu_result.col_indices().cuda();
+  return at::native::_sparse_csr_tensor_unsafe(
+      result_crow_indices,
+      result_col_indices,
+      result_values,
+      self.sizes(),
+      result_values.scalar_type(),
+      self.layout(),
+      result_values.device());
+}
+
 } // namespace native
 } // namespace at

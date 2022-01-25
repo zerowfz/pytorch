@@ -8545,6 +8545,7 @@
 - func: _block_csr_to_csr(Tensor self) -> Tensor
   dispatch:
     SparseCsrCPU: _block_csr_to_csr_cpu
+    SparseCsrCUDA: _block_csr_to_csr_cuda
 
 ## NN wrappers
 
