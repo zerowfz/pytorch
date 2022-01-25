@@ -573,8 +573,6 @@ class TestSparseCSR(TestCase):
         st = sp.csr_matrix((t.values().cpu(), t.col_indices().cpu(), t.crow_indices().cpu()), shape=tuple(t.size()))
         block_t = torch._csr_to_block_csr(t, (blocksize, blocksize))
         self.assertEqual(block_t.values().dim(), 3)
-        # print('block_t.values().sum(): ', block_t.values().sum())
-        # break
         block_st = st.tobsr(blocksize=(blocksize, blocksize))
         self.assertEqual(block_t.values().cpu(), torch.tensor(block_st.data))
         self.assertEqual(block_t.col_indices().cpu(), torch.tensor(block_st.indices).to(index_dtype))
@@ -587,11 +585,8 @@ class TestSparseCSR(TestCase):
             nnz = 15
             t = self.genSparseCSRTensor((16, 16), nnz, dtype=dtype,
                                         device=device, index_dtype=index_dtype)
-            with self.assertRaisesRegex(RuntimeError, "must be square and greater than 1."):
+            with self.assertRaisesRegex(RuntimeError, "must be square."):
                 block_t = torch._csr_to_block_csr(t, (2, 3))
-
-            with self.assertRaisesRegex(RuntimeError, "must be square and greater than 1."):
-                block_t = torch._csr_to_block_csr(t, (1, 1))
 
             with self.assertRaisesRegex(RuntimeError, r"size \(16, 16\) with block size \(5, 5\)"):
                 block_t = torch._csr_to_block_csr(t, (5, 5))
@@ -670,8 +665,7 @@ class TestSparseCSR(TestCase):
     def test_block_addmm(self, device, dtype, index_dtype, block_size):
         for (m, n, k), noncontiguous in zip(itertools.product([1, 5], repeat=3), [True, False]):
             nnz = random.randint(0, m * k)
-            if noncontiguous and block_size > 1:
-                # Conversion is currently only supported on CPU
+            if noncontiguous:
                 a = self.genSparseCSRTensor((m * block_size, k * block_size), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
                 a = torch._csr_to_block_csr(a, (block_size, block_size))
             else:
@@ -694,8 +688,7 @@ class TestSparseCSR(TestCase):
             return
         for (m, k), noncontiguous in zip(itertools.product([1, 5], repeat=2), [True, False]):
             nnz = random.randint(0, m * k)
-            if noncontiguous and block_size > 1:
-                # Conversion is currently only supported on CPU
+            if noncontiguous:
                 a = self.genSparseCSRTensor((m * block_size, k * block_size), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
                 a = torch._csr_to_block_csr(a, (block_size, block_size))
             else:
@@ -707,11 +700,13 @@ class TestSparseCSR(TestCase):
             c = make_tensor((m * block_size,), dtype=dtype, device=device, noncontiguous=noncontiguous)
             self.run_test_block_addmm_addmv(torch.addmv, c, a, b, dtype=dtype, device=device)
 
+    @parametrize("block_size", [2, 3])
+    @parametrize("index_dtype", [torch.int32, torch.int64])
     @skipCPUIfNoMklSparse
     @skipCUDAIfRocm
     @unittest.skipIf(not TEST_SCIPY, "SciPy not found")
     @dtypes(torch.float32, torch.float64, torch.complex64, torch.complex128)
-    def test_block_triangular_solve(self, device, dtype):
+    def test_block_triangular_solve(self, device, dtype, index_dtype, block_size):
         def run_test(a, b, upper, transpose, unitriangular, op_out):
             actual = torch.triangular_solve(b, a, upper=upper, unitriangular=unitriangular, transpose=transpose)
             actual_X = actual.solution
@@ -746,22 +741,20 @@ class TestSparseCSR(TestCase):
             self.assertEqual(out, actual_X)
             self.assertEqual(out, expected_X)
 
-        for index_dtype in [torch.int32, torch.int64]:
-            for (m, k), block_size, noncontiguous in zip(itertools.product([1, 5], repeat=2), [2, 3], [True, False]):
-                nnz = random.randint(0, m * m)
-                if noncontiguous and block_size > 1:
-                    # Conversion is currently only supported on CPU
-                    a = self.genSparseCSRTensor((m * block_size, m * block_size), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
-                    a = torch._csr_to_block_csr(a, (block_size, block_size))
-                else:
-                    a = self.genSparseCSRTensor((m, m), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
-                    a_data = make_tensor((nnz, block_size, block_size), dtype=dtype, device=device)
-                    a_data = a_data.mT if noncontiguous else a_data  # Test column-major blocks
-                    a = torch._sparse_csr_tensor_unsafe(a.crow_indices(), a.col_indices(), a_data, (m * block_size, m * block_size))
-                b = make_tensor((m * block_size, k), dtype=dtype, device=device, noncontiguous=noncontiguous)
+        for (m, k), noncontiguous in zip(itertools.product([1, 5], repeat=2), [True, False]):
+            nnz = random.randint(0, m * m)
+            if noncontiguous:
+                a = self.genSparseCSRTensor((m * block_size, m * block_size), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
+                a = torch._csr_to_block_csr(a, (block_size, block_size))
+            else:
+                a = self.genSparseCSRTensor((m, m), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
+                a_data = make_tensor((nnz, block_size, block_size), dtype=dtype, device=device)
+                a_data = a_data.mT if noncontiguous else a_data  # Test column-major blocks
+                a = torch._sparse_csr_tensor_unsafe(a.crow_indices(), a.col_indices(), a_data, (m * block_size, m * block_size))
+            b = make_tensor((m * block_size, k), dtype=dtype, device=device, noncontiguous=noncontiguous)
 
-                for (upper, unitriangular, transpose, op_out) in itertools.product([True, False], repeat=4):
-                    run_test(a, b, upper, unitriangular, transpose, op_out)
+            for (upper, unitriangular, transpose, op_out) in itertools.product([True, False], repeat=4):
+                run_test(a, b, upper, unitriangular, transpose, op_out)
 
     @skipCPUIfNoMklSparse
     @dtypes(torch.double)

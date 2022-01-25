@@ -692,8 +692,8 @@ I csr_count_blocks(
 
 Tensor _csr_to_block_csr_cpu(const Tensor& self, IntArrayRef blocksize) {
   TORCH_CHECK(
-      blocksize[0] == blocksize[1] && blocksize[0] > 1,
-      "blocks must be square and greater than 1. ",
+      blocksize[0] == blocksize[1],
+      "blocks must be square. ",
       "Got (",
       blocksize[0],
       ", ",
