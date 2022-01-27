@@ -571,7 +571,7 @@ class TestSparseCSR(TestCase):
         t = self.genSparseCSRTensor((m * blocksize, k * blocksize), nnz, dtype=dtype,
                                     device=device, index_dtype=index_dtype)
         st = sp.csr_matrix((t.values().cpu(), t.col_indices().cpu(), t.crow_indices().cpu()), shape=tuple(t.size()))
-        block_t = torch._csr_to_block_csr(t, (blocksize, blocksize))
+        block_t = torch.sparse._csr_to_block_csr(t, (blocksize, blocksize))
         self.assertEqual(block_t.values().dim(), 3)
         block_st = st.tobsr(blocksize=(blocksize, blocksize))
         self.assertEqual(block_t.values().cpu(), torch.tensor(block_st.data))
@@ -586,10 +586,10 @@ class TestSparseCSR(TestCase):
             t = self.genSparseCSRTensor((16, 16), nnz, dtype=dtype,
                                         device=device, index_dtype=index_dtype)
             with self.assertRaisesRegex(RuntimeError, "must be square."):
-                block_t = torch._csr_to_block_csr(t, (2, 3))
+                block_t = torch.sparse._csr_to_block_csr(t, (2, 3))
 
             with self.assertRaisesRegex(RuntimeError, r"size \(16, 16\) with block size \(5, 5\)"):
-                block_t = torch._csr_to_block_csr(t, (5, 5))
+                block_t = torch.sparse._csr_to_block_csr(t, (5, 5))
 
     @dtypes(*get_all_dtypes())
     def test_sparse_csr_from_dense_convert_error(self, device, dtype):
@@ -665,10 +665,10 @@ class TestSparseCSR(TestCase):
     def test_block_addmm(self, device, dtype, index_dtype, block_size):
         for (m, n, k), noncontiguous in zip(itertools.product([1, 5], repeat=3), [True, False]):
             nnz = random.randint(0, m * k)
-            if noncontiguous:
+            if not noncontiguous:
                 a = self.genSparseCSRTensor((m * block_size, k * block_size), nnz,
                                             dtype=dtype, device=device, index_dtype=index_dtype)
-                a = torch._csr_to_block_csr(a, (block_size, block_size))
+                a = torch.sparse._csr_to_block_csr(a, (block_size, block_size))
             else:
                 a = self.genSparseCSRTensor((m, k), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
                 a_data = make_tensor((nnz, block_size, block_size), dtype=dtype, device=device)
@@ -690,10 +690,10 @@ class TestSparseCSR(TestCase):
             return
         for (m, k), noncontiguous in zip(itertools.product([1, 5], repeat=2), [True, False]):
             nnz = random.randint(0, m * k)
-            if noncontiguous:
+            if not noncontiguous:
                 a = self.genSparseCSRTensor((m * block_size, k * block_size), nnz,
                                             dtype=dtype, device=device, index_dtype=index_dtype)
-                a = torch._csr_to_block_csr(a, (block_size, block_size))
+                a = torch.sparse._csr_to_block_csr(a, (block_size, block_size))
             else:
                 a = self.genSparseCSRTensor((m, k), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
                 a_data = make_tensor((nnz, block_size, block_size), dtype=dtype, device=device)
@@ -747,10 +747,10 @@ class TestSparseCSR(TestCase):
 
         for (m, k), noncontiguous in zip(itertools.product([1, 5], repeat=2), [True, False]):
             nnz = random.randint(0, m * m)
-            if noncontiguous:
+            if not noncontiguous:
                 a = self.genSparseCSRTensor((m * block_size, m * block_size), nnz,
                                             dtype=dtype, device=device, index_dtype=index_dtype)
-                a = torch._csr_to_block_csr(a, (block_size, block_size))
+                a = torch.sparse._csr_to_block_csr(a, (block_size, block_size))
             else:
                 a = self.genSparseCSRTensor((m, m), nnz, dtype=dtype, device=device, index_dtype=index_dtype)
                 a_data = make_tensor((nnz, block_size, block_size), dtype=dtype, device=device)
