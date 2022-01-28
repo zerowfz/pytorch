@@ -9612,9 +9612,11 @@ op_db: List[OpInfo] = [
                    skips=(
                        # Dispatch stub: unsupported device typemeta
                        DecorateInfo(unittest.expectedFailure, 'TestGradients', 'test_fn_fwgrad_bwgrad', device_type='meta'),
-                       # (ROCm) Memory access fault by GPU node-4 (Agent handle: 0x55cebc9e8430) on address 0x7fa17b757000
-                       DecorateInfo(unittest.skip("Skipped! ROCm memory exception"), 'TestGradients', 'test_fn_fwgrad_bwgrad',
-                                    device_type='cuda', dtypes=[torch.float64], active_if=TEST_WITH_ROCM),
+                       # RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!
+                       # We skip instead of xfail on non-ROCm because it breaks the test suite: #71973
+                       # (for ROCm) Memory access fault by GPU node-4 (Agent handle: 0x55cebc9e8430) on address 0x7fa17b757000
+                       DecorateInfo(unittest.skip("Skipped!"), 'TestGradients', 'test_fn_fwgrad_bwgrad',
+                                    device_type='cuda', dtypes=[torch.float64]),
                    )),
     BinaryUfuncInfo('floor_divide',
                     dtypes=all_types_and(torch.half, torch.bfloat16),
@@ -9695,7 +9697,8 @@ op_db: List[OpInfo] = [
                # Arguments for call are not valid.
                DecorateInfo(unittest.skip("Skipped!"), 'TestJit', 'test_variant_consistency_jit', dtypes=(torch.float32, torch.complex64)),  # noqa: B950
                # 69925: RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!
-               DecorateInfo(unittest.expectedFailure, 'TestGradients', 'test_fn_fwgrad_bwgrad', device_type='cuda'),
+               #  We skip instead of xfail on non-ROCm because it breaks the test suite: #71973
+               DecorateInfo(unittest.skip("Skipped!"), 'TestGradients', 'test_fn_fwgrad_bwgrad', device_type='cuda'),
                # (ROCm) Memory exception on virtual address 0x7f6f3deb7000, node id 4: Page not present
                DecorateInfo(unittest.skip("Skipped! ROCm memory exception"), 'TestGradients', 'test_fn_fwgrad_bwgrad',
                             device_type='cuda', dtypes=[torch.float64, torch.complex128], active_if=TEST_WITH_ROCM),
@@ -14013,9 +14016,11 @@ op_db: List[OpInfo] = [
            skips=(
                # Dispatch stub: unsupported device typemeta
                DecorateInfo(unittest.expectedFailure, 'TestGradients', 'test_fn_fwgrad_bwgrad', device_type='meta'),
-               # (ROCm) Memory access fault by GPU node-4 (Agent handle: 0x55860348e690) on address 0x7f0f4ddcb000
+               # RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!
+               #  We skip instead of xfail on non-ROCm because it breaks the test suite: #71973
+               # (for ROCm) Memory access fault by GPU node-4 (Agent handle: 0x55860348e690) on address 0x7f0f4ddcb000
                DecorateInfo(unittest.skip("Skipped! ROCm memory exception"), 'TestGradients', 'test_fn_fwgrad_bwgrad',
-                            device_type='cuda', dtypes=[torch.float64, torch.complex128], active_if=TEST_WITH_ROCM),
+                            device_type='cuda', dtypes=[torch.float64, torch.complex128]),
            )),
     OpInfo('trapezoid',
            dtypes=all_types_and_complex_and(torch.float16, torch.bfloat16),
@@ -14026,9 +14031,11 @@ op_db: List[OpInfo] = [
            skips=(
                # Dispatch stub: unsupported device typemeta
                DecorateInfo(unittest.expectedFailure, 'TestGradients', 'test_fn_fwgrad_bwgrad', device_type='meta'),
-               # (ROCm) Memory access fault by GPU node-4 (Agent handle: 0x55bbf53d5500) on address 0x7fe536eb5000
+               # RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!
+               #  We skip instead of xfail on non-ROCm because it breaks the test suite: #71973
+               # (for ROCm) Memory access fault by GPU node-4 (Agent handle: 0x55bbf53d5500) on address 0x7fe536eb5000
                DecorateInfo(unittest.skip("Skipped! ROCm memory exception"), 'TestGradients', 'test_fn_fwgrad_bwgrad',
-                            device_type='cuda', dtypes=[torch.float64, torch.complex128], active_if=TEST_WITH_ROCM),
+                            device_type='cuda', dtypes=[torch.float64, torch.complex128]),
            )),
     OpInfo('cumulative_trapezoid',
            dtypes=all_types_and_complex_and(),
@@ -15471,9 +15478,10 @@ op_db: List[OpInfo] = [
                 "TestGradients",
                 "test_fn_gradgrad",
             ),
-            # (ROCm) Memory access fault by GPU node-4 (Agent handle: 0x5642a3aa7b60) on address 0x5642bab40000
-            DecorateInfo(unittest.skip("Skipped! ROCm memory exception"), 'TestGradients', 'test_forward_mode_AD',
-                         device_type='cuda', dtypes=[torch.float64, torch.complex128], active_if=TEST_WITH_ROCM),
+            # RuntimeError: CUDA error: an illegal memory access was encountered
+            # (for ROCm) Memory access fault by GPU node-4 (Agent handle: 0x5642a3aa7b60) on address 0x5642bab40000
+            DecorateInfo(unittest.skip("Skipped! memory exception"), 'TestGradients', 'test_forward_mode_AD',
+                         device_type='cuda', dtypes=[torch.float64, torch.complex128]),
         ),
     ),
     OpInfo(
