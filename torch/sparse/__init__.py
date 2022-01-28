@@ -256,4 +256,4 @@ Args:
         overflows. Default: None
 """)
 
-_csr_to_block_csr = torch._C._sparse._csr_to_block_csr
+_csr_to_block_csr = _sparse._csr_to_block_csr
