@@ -1118,6 +1118,24 @@ class TestNN(NNTestCase):
             names(s.named_buffers()),
             ['0.dummy_buf', '0.l1.layer_dummy_buf'])
 
+    def test_named_parameters_buffers_duplicates(self):
+        class Foo(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.bias = nn.Parameter(torch.randn(3))
+                self.linear = nn.Linear(3, 3)
+                self.linear.bias = self.bias
+                self.linear_cloned = self.linear
+                self.register_buffer('buffer', torch.randn(3))
+                self.register_buffer('buffer_cloned', self.buffer)
+
+        mod = Foo()
+        self.assertEqual(len(list(mod.named_parameters())), 2)
+        self.assertEqual(len(list(mod.named_parameters(remove_duplicate=False))), 5)
+
+        self.assertEqual(len(list(mod.named_buffers())), 1)
+        self.assertEqual(len(list(mod.named_buffers(remove_duplicate=False))), 2)
+
     def test_call_supports_python_dict_output(self):
         class Net(nn.Module):
             def __init__(self):
@@ -1520,6 +1538,17 @@ class TestNN(NNTestCase):
         self.assertEqual(n, nn.Sequential(l1, l2, l3))
         del n[1::2]
         self.assertEqual(n, nn.Sequential(l1, l3))
+
+    def test_Sequential_append(self):
+        l1 = nn.Linear(10, 20)
+        l2 = nn.Linear(20, 30)
+        l3 = nn.Linear(30, 40)
+        l4 = nn.Linear(40, 50)
+        n = nn.Sequential(l1, l2, l3)
+        n2 = n.append(l4)
+        self.assertEqual(n, nn.Sequential(l1, l2, l3, l4))
+        self.assertEqual(n2, nn.Sequential(l1, l2, l3, l4))
+        self.assertEqual(nn.Sequential(l1).append(l2).append(l4), nn.Sequential(l1, l2, l4))
 
     def test_ModuleList(self):
         modules = [nn.ReLU(), nn.Linear(5, 5)]
