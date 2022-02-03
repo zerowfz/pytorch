@@ -11613,7 +11613,7 @@ Example::
 """)
 
 
-add_docstr(torch.quantized_max_pool2d,
+add_docstr(torch.max_pool2d,
            r"""
 quantized_max_pool2d(input, kernel_size, stride=[], padding=0, dilation=1, ceil_mode=False) -> Tensor
 
@@ -11635,7 +11635,7 @@ Returns:
 Example::
 
     >>> qx = torch.quantize_per_tensor(torch.rand(2, 2, 2, 2), 1.5, 3, torch.quint8)
-    >>> torch.quantized_max_pool2d(qx, [2,2])
+    >>> torch.max_pool2d(qx, [2,2])
     tensor([[[[1.5000]],
 
             [[1.5000]]],
