@@ -2,6 +2,7 @@
 #include <torch/csrc/lazy/core/helpers.h>
 #include <torch/csrc/lazy/core/metrics.h>
 #include <torch/csrc/lazy/core/permutation_util.h>
+#include <torch/csrc/lazy/core/tensor_impl.h>
 #include <torch/torch.h>
 
 #include <iostream>
@@ -9,6 +10,7 @@
 #include "c10/core/Device.h"
 #include "cpp_test_util.h"
 #include "lazy_tensor_core/csrc/ts_backend/backend_impl.h"
+#include "lazy_tensor_core/csrc/debug_util.h"
 #include "torch_ltc_ts_test.h"
 
 namespace torch_lazy_tensors {
@@ -530,19 +532,29 @@ TEST_F(AtenLtcTsTensorTest, TestDivScalarInPlace) {
   for (torch::ScalarType scalar_type : {torch::kFloat}) {
     torch::Tensor a =
         isFloatingType(scalar_type)
-            ? torch::rand(
+            ? torch::ones(
                   {3, 4},
                   torch::TensorOptions(scalar_type).device(DefaultDevice()))
             : torch::randint(
                   1, 100, {3, 4},
                   torch::TensorOptions(scalar_type).device(DefaultDevice()));
-    for (bool is_float : {true, false}) {
-      torch::Scalar b = is_float ? torch::Scalar(3.0) : torch::Scalar(3);
+    for (bool is_float : {true, true}) {
+      torch::Scalar b = is_float ? torch::Scalar(2.0) : torch::Scalar(2);
       ForEachDevice([&](const torch::Device& device) {
         torch::Tensor xla_a = CopyToDevice(a, device);
+        auto* impl = dynamic_cast<torch::lazy::LTCTensorImpl*>(xla_a.unsafeGetTensorImpl());
+        //print(impl->tensor().data().handle);
+        //print(a);
         torch::Tensor c = a.div_(b);
         torch::Tensor xla_c = xla_a.div_(b);
-        AllClose(c, xla_c);
+
+        impl = dynamic_cast<torch::lazy::LTCTensorImpl*>(xla_c.unsafeGetTensorImpl());
+        std::vector<torch::lazy::LazyTensor> lazy_tensors{impl->tensor()};
+        const std::vector<size_t> indices{0};
+        torch_lazy_tensors::DebugUtil::SaveTensorsGraphInfo("test_aten_ltc_ts_tensor", lazy_tensors, &indices);
+
+        std::cout << std::endl;
+        AllClose(a, xla_a);
       });
     }
   }

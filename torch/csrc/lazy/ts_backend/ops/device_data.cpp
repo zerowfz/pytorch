@@ -15,6 +15,14 @@ DeviceData::DeviceData(std::shared_ptr<BackendData> data)
           /*hash_seed=*/static_cast<uint32_t>(101)),
       data_(std::move(data)) {}
 
+DeviceData::DeviceData(std::shared_ptr<BackendData> data, hash_t hash_seed)
+    : TsNode(
+          ltc_device_data,
+          data->shape(),
+          /*num_outputs=*/1,
+          hash_seed),
+      data_(std::move(data)) {}
+
 std::string DeviceData::ToString() const {
   std::stringstream ss;
   ss << TsNode::ToString() << ", device=" << data_->device();
