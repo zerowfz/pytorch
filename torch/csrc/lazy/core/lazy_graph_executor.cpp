@@ -20,6 +20,7 @@
 #include <torch/csrc/lazy/ts_backend/ops/scalar.h>
 
 #include <ATen/ScalarOps.h>
+#include <cstddef>
 
 namespace torch {
 namespace lazy {
@@ -465,7 +466,7 @@ void LazyGraphExecutor::SyncTensorsGraph(
   config.sync_ltc_data = sync_ltc_data;
 
   auto async = SyncTensorsGraphInternal(tensors, devices, config);
-  if (wait && async != nullptr) {
+  if (FLAGS_torch_lazy_use_thread_pool && wait && async != nullptr) {
     async->mwait.Wait();
   }
 }
@@ -474,6 +475,7 @@ void LazyGraphExecutor::MarkStep(const BackendDevice& device) {
   TORCH_LAZY_COUNTER("MarkStep", 1);
   DeviceContextArena::Get()->MarkStep(device);
   ScopePusher::ResetScopes();
+  DeviceData::ResetBackendDataStorage();
   g_tls_data.Reset();
 }
 
@@ -571,13 +573,13 @@ Value LazyGraphExecutor::GetIrValueForExpandedScalar(
 
 LazyGraphExecutor::Async::Async(
     SyncTensorCollection* coll,
-    std::vector<BackendDataPtr> parameters_data,
+    std::vector<size_t> parameter_backend_data_storage_index,
     std::vector<BackendDataPtr> tensors_data,
     ComputationCache::TypePtr cached_computation)
     : mwait(1),
       indices(std::move(coll->indices)),
       unlocker(std::move(coll->unlocker)),
-      parameters_data(std::move(parameters_data)),
+      parameter_backend_data_storage_index(std::move(parameter_backend_data_storage_index)),
       device(coll->device),
       cached_computation(std::move(cached_computation)),
       tensors_data(std::move(tensors_data)) {}
@@ -724,18 +726,18 @@ LazyGraphExecutor::PostOrderData LazyGraphExecutor::RunPostOrder(
   }
   PostOrderData po_data;
   po_data.post_order = Util::ComputePostOrder(roots, &po_data.emission_map);
-  std::unordered_map<BackendData::Handle, size_t> data_handles;
+  std::unordered_map<size_t, size_t> data_handles;
   for (auto node : po_data.post_order) {
     const DeviceData* device_data = DeviceData::Cast(node);
     if (device_data != nullptr) {
-      BackendData::Handle handle = device_data->data()->GetHandle();
-      auto it = data_handles.find(handle);
+      size_t index = device_data->Index();
+      auto it = data_handles.find(index);
       if (it != data_handles.end()) {
         po_data.parameter_sequence.push_back(it->second);
       } else {
-        po_data.parameter_sequence.push_back(po_data.parameters_data.size());
-        data_handles[handle] = po_data.parameters_data.size();
-        po_data.parameters_data.push_back(device_data->data());
+        po_data.parameter_sequence.push_back(po_data.parameter_backend_data_storage_index.size());
+        data_handles[index] = po_data.parameter_backend_data_storage_index.size();
+        po_data.parameter_backend_data_storage_index.push_back(index);
       }
     }
   }
@@ -757,7 +759,7 @@ std::shared_ptr<LazyGraphExecutor::Async> LazyGraphExecutor::TryRunCachedSync(
   return ScheduleSyncTensorsGraph(
       tensors,
       coll,
-      std::move(po_data->parameters_data),
+      std::move(po_data->parameter_backend_data_storage_index),
       std::move(cached_computation));
 }
 
@@ -814,15 +816,21 @@ LazyGraphExecutor::CompilationResult LazyGraphExecutor::Compile(
   if (computation) {
     // TODO(whc) should computation be allowed null here? (because it is in one
     // case)
+    std::cout << "computation->parameters_size() = "
+      << computation->parameters_size()
+      << std::endl;
+    std::cout << "po_data->parameter_backend_data_storage_column.size() = "
+      << po_data->parameter_backend_data_storage_index.size()
+      << std::endl;
     TORCH_CHECK(
-        computation->parameters_size() == po_data->parameters_data.size());
+        computation->parameters_size() == po_data->parameter_backend_data_storage_index.size());
   }
 
   return {
       /*device=*/coll.device,
       /*emitted_nodes=*/lowering_ctx->GetEmittedNodeCount(),
       /*computation=*/std::move(computations.front()),
-      /*parameters_data=*/std::move(po_data->parameters_data)};
+      /*parameters_data=*/std::move(po_data->parameter_backend_data_storage_index)};
 }
 
 LazyGraphExecutor::ComputationCache* LazyGraphExecutor::GetComputationCache() {
@@ -917,23 +925,25 @@ std::shared_ptr<LazyGraphExecutor::Async> LazyGraphExecutor::
   return ScheduleSyncTensorsGraph(
       tensors,
       &coll,
-      std::move(compile_result.parameters_data),
+      std::move(compile_result.parameter_backend_data_storage_index),
       std::move(cached_computation));
 }
 
 std::shared_ptr<LazyGraphExecutor::Async> LazyGraphExecutor::
     ScheduleSyncTensorsGraph(
         SyncTensorCollection* coll,
-        std::vector<BackendDataPtr> parameters_data,
+        std::vector<size_t> parameter_backend_data_storage_index,
         std::vector<BackendDataPtr> tensors_data,
         ComputationCache::TypePtr cached_computation) {
   std::shared_ptr<Async> async = std::make_shared<Async>(
       coll,
-      std::move(parameters_data),
+      std::move(parameter_backend_data_storage_index),
       std::move(tensors_data),
       std::move(cached_computation));
 
-  auto syncfn = [this, async, hash = coll->hash]() {
+  // Copy a thread_local version of backend_data_storage
+  std::vector<BackendDataPtr> local_backend_data_storage = DeviceData::backend_data_storage;
+  auto syncfn = [this, async, hash = coll->hash, local_backend_data_storage]() {
     // For profiling lazy trace overhead
     if (noop_execution_mode_) {
       return;
@@ -942,9 +952,15 @@ std::shared_ptr<LazyGraphExecutor::Async> LazyGraphExecutor::
     try {
       VLOG(3) << "Executing IR graph hash " << HashToString(hash)
               << " on device " << async->device << " ...";
+      std::vector<BackendDataPtr> parameter_data(async->parameter_backend_data_storage_index.size());
+      for (int i = 0; i < parameter_data.size(); i++) {
+        std::cout << "Read from local_backend_data_storage[" << i << "]" << std::endl;
+        parameter_data[i] = local_backend_data_storage[async->parameter_backend_data_storage_index[i]];
+      }
+
       auto results = getBackend()->ExecuteComputation(
           *async->cached_computation->computation,
-          async->parameters_data,
+          parameter_data,
           async->device);
       VLOG(3) << "Executing IR graph hash " << HashToString(hash)
               << " on device " << async->device << " done!";
@@ -975,7 +991,11 @@ std::shared_ptr<LazyGraphExecutor::Async> LazyGraphExecutor::
     }
   };
 
-  ScheduleIoClosure(async->mwait.Completer(std::move(syncfn)));
+  if (FLAGS_torch_lazy_use_thread_pool) {
+    ScheduleIoClosure(async->mwait.Completer(std::move(syncfn)));
+  } else {
+    syncfn();
+  }
   return async;
 }
 
@@ -983,12 +1003,12 @@ std::shared_ptr<LazyGraphExecutor::Async> LazyGraphExecutor::
     ScheduleSyncTensorsGraph(
         std::vector<LazyTensor>* tensors,
         SyncTensorCollection* coll,
-        std::vector<BackendDataPtr> parameters_data,
+        std::vector<size_t> parameter_backend_data_storage_index,
         ComputationCache::TypePtr cached_computation) {
   auto tensors_data = FetchTensorData(tensors, coll->config, coll->indices);
   return ScheduleSyncTensorsGraph(
       coll,
-      std::move(parameters_data),
+      std::move(parameter_backend_data_storage_index),
       std::move(tensors_data),
       std::move(cached_computation));
 }
@@ -998,7 +1018,7 @@ std::vector<at::Tensor> LazyGraphExecutor::GetTensorsFused(
   SyncTensorsConfig config;
   config.force_ltc_data = false;
   auto async = SyncTensorsGraphInternal(tensors, {}, config);
-  if (async != nullptr) {
+  if (FLAGS_torch_lazy_use_thread_pool && async != nullptr) {
     async->mwait.Wait();
   }
   std::vector<BackendDataPtr> tensors_data = GatherTensorsData(

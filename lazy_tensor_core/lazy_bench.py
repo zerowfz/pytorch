@@ -655,9 +655,9 @@ if __name__ == "__main__" :
                         if not check_eval_correctness(args, benchmark, lazy_benchmark, current_name):
                             exit(3)
 
-                    lazy_overhead_experiment(args, results, benchmark, lazy_benchmark)
+                    #lazy_overhead_experiment(args, results, benchmark, lazy_benchmark)
                     lazy_compute_experiment(args, f"amortized {args.inner_loop_repeat}x", results, benchmark, lazy_benchmark)
-                    lazy_compute_experiment(args, "unamortized", results, benchmark, lazy_benchmark, sync_every_iter=True)
+                    #lazy_compute_experiment(args, "unamortized", results, benchmark, lazy_benchmark, sync_every_iter=True)
 
         except Exception as e:
             print(f"ERROR: {current_name}: {e}")

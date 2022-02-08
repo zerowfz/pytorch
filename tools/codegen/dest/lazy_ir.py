@@ -227,16 +227,16 @@ class GenLazyNativeFuncDefinition:
 
         node_cache_str = f"""
             auto node_cache = torch::lazy::GetNodeCache();
-            //std::cout << "{self.class_method_name}::{schema.aten_name}::new_node->hash():" << new_node->hash() << std::endl;
             if (node_cache->Get(new_node->hash()) == nullptr)
             {{
                 node_cache->Add(new_node->hash(), new_node);
                 node = std::move(new_node);
+                std::cout << "Create a new " << node->ToString() << std::endl;
             }} else {{
                 // Reuse the old node instead of using the newly-created IR, to see if reusing works
                 node = node_cache->Get(new_node->hash());
+                std::cout << "Reuse " << node->ToString() << std::endl;
             }}
-            //std::cout << "{self.class_method_name}::{schema.aten_name}::node:" << node << std::endl;
         """ if not schema.name.name.inplace and not func.func.is_out_fn() else """node = std::move(new_node);
         """
         # """ if schema.aten_name in ["addcdiv", "addcmul", "sqrt", "gelu"] else """node = std::move(new_node);

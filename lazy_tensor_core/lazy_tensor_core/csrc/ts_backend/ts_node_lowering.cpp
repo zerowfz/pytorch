@@ -156,7 +156,7 @@ class TSNodeLowering : public TSNodeLoweringInterface {
       const torch::lazy::DeviceData* device_data_node =
           torch::lazy::NodeCast<torch::lazy::DeviceData>(
               node, *torch::lazy::ltc_device_data);
-      return {loctx()->GetParameter(device_data_node->data())};
+          return {loctx()->GetParameter(device_data_node->data())};
     }
     std::vector<torch::jit::NamedValue> arguments;
     for (const torch::lazy::Output& output : node->operands()) {
