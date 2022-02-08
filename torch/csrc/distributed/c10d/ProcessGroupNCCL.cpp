@@ -1338,6 +1338,13 @@ c10::intrusive_ptr<ProcessGroup::Work> ProcessGroupNCCL::collective(
     OpType opType,
     const char* profilingTitle) {
 
+  // A hack to copy lazy to cuda to bypass following checks.
+  if (inputs.front().device().type() == at::kLazy) {
+    for (auto& input : inputs) {
+      input = input.to("cuda");
+    }
+  }
+
   errorIfCapturingNonCapturableNCCL();
 
   // Bump collective counter
