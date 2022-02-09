@@ -40,10 +40,11 @@ std::unique_ptr<CodeGen> CreateCodeGen(
     StmtPtr stmt,
     const std::vector<CodeGen::BufferArg>& params,
     at::Device device,
-    const std::string& kernel_func_name) {
+    const std::string& kernel_func_name,
+    const bool pre_alloc) {
   RegisterCodeGenList::StmtFactoryMethod method =
       RegisterCodeGenList::GetInstance().FindStmtFactoryMethod(name);
-  return method(stmt, params, device, kernel_func_name);
+  return method(stmt, params, device, kernel_func_name, pre_alloc);
 }
 
 ExprPtr GenericIntrinsicsExpander::mutate(IntrinsicsPtr v) {
@@ -185,26 +186,39 @@ std::vector<std::pair<BufPtr, BufPtr>> AllocBufsWithMemReuse(
   return buf_allocs;
 }
 
-StmtPtr insertAllocFree(
-    std::vector<std::pair<BufPtr, BufPtr>>& buf_allocs,
-    StmtPtr stmt) {
-  BlockPtr b = to<Block>(stmt);
+void CodeGen::insertAllocFree(
+    std::vector<std::pair<BufPtr, BufPtr>>& buf_to_alloc_maps,
+    const bool pre_alloc) {
+  BlockPtr b = to<Block>(stmt_);
   if (!b) {
-    b = alloc<Block>(std::vector<StmtPtr>({stmt}));
+    b = alloc<Block>(std::vector<StmtPtr>({stmt_}));
   }
 
-  // Insert allocations and frees for temporary buffers at global scope.
-  for (auto rit = buf_allocs.rbegin(); rit != buf_allocs.rend(); ++rit) {
+  // Go through intermediate buffer list with reuse info to allocate these
+  // buffers.
+  for (auto rit = buf_to_alloc_maps.rbegin(); rit != buf_to_alloc_maps.rend();
+       ++rit) {
+    // Only allocate buffers that are mapped to selves.
     if (rit->first == rit->second) {
       BufPtr buf = rit->first;
-      b->prepend_stmt(alloc<Allocate>(buf));
-      b->append_stmt(alloc<Free>(buf));
+      auto size = bufSize(buf);
+      // Preallocate buffers with static shapes if specified.
+      if (pre_alloc && size) {
+        // Save buffers for buffer preallocation in TEK.
+        buffers_to_pre_alloc_.emplace_back(buf);
+        // Add preallocated buffers to args.
+        buffer_args_.emplace_back(BufHandle(buf));
+      } else {
+        // Insert allocations and frees for temporary buffers at global scope.
+        b->prepend_stmt(alloc<Allocate>(buf));
+        b->append_stmt(alloc<Free>(buf));
+      }
     } else {
       b->prepend_stmt(alloc<PlacementAllocate>(rit->first, rit->second));
     }
   }
 
-  return b;
+  set_stmt(b);
 }
 
 // We allocate intermediate buffers by inserting Allocate/Free or
@@ -212,7 +226,7 @@ StmtPtr insertAllocFree(
 // and PlacementAllocate stmt reuses the memory of one buffer for another
 // buffer. In current implementation, we use linear scan for memory reuses.
 // TODO: try more memory reuse algorithms and compare their memory efficiency.
-void CodeGen::allocIntermediateBufs() {
+void CodeGen::allocIntermediateBufs(const bool pre_alloc) {
   // Identify intermediate buffers that are not allocated yet.
   auto bufs = NodeFinder<Buf>::find(stmt_);
   std::unordered_set<BufPtr> bufs_allocated;
@@ -239,12 +253,12 @@ void CodeGen::allocIntermediateBufs() {
   // For each intermediate buffer, we reuse the memory of an old buffer whose
   // liveness range does not overlap with the current buffer, or allocate memory
   // if reusing buffer is impossible.
-  auto buf_allocs = AllocBufsWithMemReuse(interm_bufs, interm_buf_ranges);
+  auto buf_to_alloc_maps =
+      AllocBufsWithMemReuse(interm_bufs, interm_buf_ranges);
 
   // Insert memory allocation/mapping nodes.
-  if (buf_allocs.size() > 0) {
-    auto stmt_new = insertAllocFree(buf_allocs, stmt_);
-    set_stmt(stmt_new);
+  if (buf_to_alloc_maps.size() > 0) {
+    insertAllocFree(buf_to_alloc_maps, pre_alloc);
   }
 
   GRAPH_DEBUG("\nMemory Allocation:\n\n", *stmt(), "\n");

@@ -125,6 +125,58 @@ graph(%a.1 : Float(8, 8, strides=[8, 1], requires_grad=0, device=cpu),
   ASSERT_TRUE(at::allclose(o, ref));
 }
 
+TEST_F(Kernel, NoPreAllocDynamicIntermediateBufs) {
+  const auto graph_string = R"IR(
+graph(%a.1 : Float(SS(-2), SS(-2), requires_grad=0, device=cpu),
+      %b.1 : Float(SS(-2), SS(-2), requires_grad=0, device=cpu),
+      %SS_2 : int):
+  %2 : int = prim::Constant[value=1]()
+  %c.2 : Float(SS(-2), SS(-2), requires_grad=0, device=cpu) = aten::matmul(%a.1, %b.1) # test_matmul.py:12:12
+  %3 : Float(SS(-2), SS(-2), requires_grad=0, device=cpu) = aten::add(%a.1, %c.2, %2) # test_matmul.py:13:15
+  return (%3))IR";
+  auto graph = std::make_shared<Graph>();
+  parseIR(graph_string, &*graph);
+
+  int n = 8;
+  auto a = at::rand({n, n}, TensorOptions(kCPU).dtype(at::kFloat));
+  auto b = at::rand({n, n}, TensorOptions(kCPU).dtype(at::kFloat));
+  auto o = at::zeros({n, n}, TensorOptions(kCPU).dtype(at::kFloat));
+  auto ref = at::matmul(a, b) + a;
+
+  std::vector<torch::jit::StrideInput> input_desc = {
+      torch::jit::StrideInput::S_AS_ARG, torch::jit::StrideInput::S_ONE};
+  std::vector<torch::jit::StrideInput> output_desc = {
+      torch::jit::StrideInput::TENSOR_CONT};
+  std::unordered_map<
+      const torch::jit::Value*,
+      std::vector<torch::jit::StrideInput>>
+      symbolic_strides;
+  symbolic_strides[graph->inputs().at(0)] = input_desc;
+  symbolic_strides[graph->inputs().at(1)] = input_desc;
+  symbolic_strides[graph->outputs().at(0)] = output_desc;
+  TensorExprKernel k(graph, {}, {-2}, true, symbolic_strides);
+
+  auto stmt = k.getCodeGenStmt();
+  std::ostringstream oss;
+  oss << *stmt;
+
+  // Check whether the intermediate buffer has been added to constants
+  auto constants = k.getConstantDescriptors();
+  ASSERT_EQ(constants.size(), 0);
+
+  // Check the IR we produced
+  torch::jit::testing::FileCheck().check("Alloc")->run(oss.str());
+  torch::jit::testing::FileCheck().check("Free")->run(oss.str());
+
+  // Check correctness
+  std::vector<at::Tensor> inputs = {a, b};
+  std::vector<IValue> stack = fmap<IValue>(inputs);
+  stack.push_back(n);
+  k.run(stack);
+  o = stack[0].toTensor();
+  ASSERT_TRUE(at::allclose(o, ref));
+}
+
 TEST_F(Kernel, _1) {
   const auto graph_string = R"IR(
       graph(%0 : Float(5, 3, strides=[3, 1], device=cpu),
