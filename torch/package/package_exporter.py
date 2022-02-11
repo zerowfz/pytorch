@@ -22,8 +22,7 @@ from typing import (
     Type,
 )
 
-import torch
-from torch.utils.hooks import RemovableHandle
+from ._hooks import RemovableHandle
 
 from ._digraph import DiGraph
 from ._importlib import _normalize_path
@@ -36,8 +35,6 @@ from .importer import Importer, OrderedImporter, sys_importer
 from ._zip_file_torchscript import TorchScriptPackageZipFileWriter
 from ._zip_file import PackageZipFileWriter
 import inspect
-
-_gate_torchscript_serialization = True
 
 ActionHook = Callable[["PackageExporter", str], None]
 
@@ -689,7 +686,7 @@ class PackageExporter:
         Hooks will be called in order of registration.
 
         Returns:
-            :class:`torch.utils.hooks.RemovableHandle`:
+            :class:`torch.package._hooks.RemovableHandle`:
                 A handle that can be used to remove the added hook by calling
                 ``handle.remove()``.
         """
@@ -708,7 +705,7 @@ class PackageExporter:
         Hooks will be called in order of registration.
 
         Returns:
-            :class:`torch.utils.hooks.RemovableHandle`:
+            :class:`torch.package._hooks.RemovableHandle`:
                 A handle that can be used to remove the added hook by calling
                 ``handle.remove()``.
         """
@@ -727,7 +724,7 @@ class PackageExporter:
         Hooks will be called in order of registration.
 
         Returns:
-            :class:`torch.utils.hooks.RemovableHandle`:
+            :class:`torch.package._hooks.RemovableHandle`:
                 A handle that can be used to remove the added hook by calling
                 ``handle.remove()``.
         """
@@ -849,14 +846,6 @@ class PackageExporter:
 
     def _persistent_id(self, obj):
         if hasattr(obj, "__reduce_package__") and not inspect.isclass(obj):
-            if _gate_torchscript_serialization and isinstance(
-                obj, torch.jit.RecursiveScriptModule
-            ):
-                raise Exception(
-                    "Serializing ScriptModules directly into a package is a beta feature. "
-                    "To use, set global "
-                    "`torch.package.package_exporter._gate_torchscript_serialization` to `False`."
-                )
             if self.serialized_reduces.get(id(obj)) is None:
                 self.serialized_reduces[id(obj)] = (
                     "reduce_package",
