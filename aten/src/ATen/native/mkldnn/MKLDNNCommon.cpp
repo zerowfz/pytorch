@@ -4,8 +4,6 @@
 
 #if AT_MKLDNN_ENABLED()
 
-#include <dnnl.h>
-#include <dnnl.hpp>
 #include <ideep.hpp>
 
 namespace at { namespace native {
@@ -120,7 +118,7 @@ ideep::tensor itensor_from_tensor(const Tensor& tensor) {
 }
 
 int set_verbose(int level) {
-    return dnnl::status::success == dnnl::set_verbose(level);
+    return ideep::utils::set_verbose(level);
 }
 
 }}
