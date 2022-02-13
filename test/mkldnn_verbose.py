@@ -20,4 +20,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--verbose-level", default=0, type=int)
     args = parser.parse_args()
-    run_model(args.verbose_level)
+    try:
+        run_model(args.verbose_level)
+    except:
+        print('MKLDNN is not enabled')
