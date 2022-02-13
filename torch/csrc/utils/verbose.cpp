@@ -1,6 +1,8 @@
 #include <torch/csrc/utils/pybind.h>
 #include <torch/csrc/utils/verbose_wrapper.h>
 
+namespace torch {
+
 void initVerboseBindings(PyObject* module) {
   auto m = py::handle(module).cast<py::module>();
 
@@ -8,3 +10,5 @@ void initVerboseBindings(PyObject* module) {
   verbose.def("mkl_set_verbose", torch::verbose::_mkl_set_verbose);
   verbose.def("mkldnn_set_verbose", torch::verbose::_mkldnn_set_verbose);
 }
+
+} // namespace torch

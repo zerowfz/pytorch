@@ -11,7 +11,7 @@
 namespace torch {
 namespace verbose {
 
-int _mkl_set_verbose(int enable) {
+TORCH_API int _mkl_set_verbose(int enable) {
 #if AT_MKL_ENABLED()
   return mkl_verbose(enable);
 #else
@@ -19,7 +19,7 @@ int _mkl_set_verbose(int enable) {
 #endif
 }
 
-int _mkldnn_set_verbose(int level) {
+TORCH_API int _mkldnn_set_verbose(int level) {
 #if AT_MKLDNN_ENABLED()
   return at::native::set_verbose(level);
 #else
