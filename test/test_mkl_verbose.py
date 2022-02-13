@@ -9,7 +9,7 @@ class TestMKLVerbose(TestCase):
         num = 0
         loc = os.path.dirname(os.path.abspath(__file__))
         with subprocess.Popen('python -u {}/mkl_verbose.py --verbose-level=1'.format(loc), shell=True,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as p:
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as p:
             for line in p.stdout.readlines():
                 line = str(line, 'utf-8').strip()
                 if line.startswith("MKL_VERBOSE"):
@@ -20,7 +20,7 @@ class TestMKLVerbose(TestCase):
         num = 0
         loc = os.path.dirname(os.path.abspath(__file__))
         with subprocess.Popen('python -u {}/mkl_verbose.py --verbose-level=0'.format(loc), shell=True,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as p:
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as p:
             for line in p.stdout.readlines():
                 line = str(line, 'utf-8').strip()
                 if line.startswith("MKL_VERBOSE"):
