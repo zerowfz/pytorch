@@ -22,5 +22,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
     try:
         run_model(args.verbose_level)
-    except:
-        print('MKLDNN is not enabled')
+    except Exception as e:
+        print(e)

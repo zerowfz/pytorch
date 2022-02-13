@@ -14,7 +14,7 @@ class TestMKLVerbose(TestCase):
                 line = str(line, 'utf-8').strip()
                 if line.startswith("MKL_VERBOSE"):
                     num = num + 1
-                elif line == 'MKL is not enabled':
+                elif line == 'Failed to set MKL into verbose mode. Please consider to disable this verbose scope.':
                     return
         assert num > 0, 'oneMKL verbose messages not found.'
 
