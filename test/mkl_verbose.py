@@ -2,10 +2,10 @@ import argparse
 import torch
 
 def run_model(level):
-    tensor1 = torch.randn(10, 3, 4)
-    tensor2 = torch.randn(10, 4, 5)
+    m = torch.nn.Linear(20, 30)
+    input = torch.randn(128, 20)
     with torch.backends.mkl.verbose(level):
-        torch.matmul(tensor1, tensor2)
+        m(input)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
