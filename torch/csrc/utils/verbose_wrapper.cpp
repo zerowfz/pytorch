@@ -1,4 +1,5 @@
 #include <ATen/Config.h>
+#include <c10/macros/Export.h>
 
 #if AT_MKL_ENABLED()
 #include <mkl.h>
