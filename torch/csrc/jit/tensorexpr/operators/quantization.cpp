@@ -141,9 +141,9 @@ bool isNLC(const BufHandle& buf) {
   }
   auto dims1 = to<LongImm>(IRSimplifier::simplify(dims[1]))->value();
   auto strides1 = to<LongImm>(IRSimplifier::simplify(strides[1]))->value();
-  auto strides3 = to<LongImm>(IRSimplifier::simplify(strides[3]))->value();
+  auto strides2 = to<LongImm>(IRSimplifier::simplify(strides[2]))->value();
 
-  return ((strides3 == dims1) && (strides1 == 1));
+  return ((strides2 == dims1) && (strides1 == 1));
 }
 
 ExprHandle quant(
@@ -247,7 +247,8 @@ Tensor computeQuantizedAdd(
       ExprHandleVectorToExprVector(outputShape),
       out_dtype,
       nullptr,
-      c10::nullopt,
+      isNHWC(QA) || isNLC(QA) ? make_channels_last_strides(outputShape)
+                              : make_contiguous_strides(outputShape),
       out_qscale.node(),
       out_qzero.node());
   return Tensor(buf, vars, exprHandle.node());
@@ -748,12 +749,14 @@ Tensor computeUpsampleNearest2d(
     return A.load(newAxes);
   };
   auto e = body_func(args);
+  auto strides = isNHWC(A) || isNLC(A) ? make_channels_last_strides(outputShape)
+                                       : make_contiguous_strides(outputShape);
   BufHandle buf = Buf::make(
-      "quantize_upsample_nearest2d",
+      "upsample_nearest2d",
       outputShape,
       Dtype(*outputType),
-      c10::nullopt,
-      c10::nullopt,
+      c10::nullopt, // initializer
+      fmap(strides, [&](ExprPtr stride) { return ExprHandle(stride); }),
       ExprHandle(A.node()->qscale()),
       ExprHandle(A.node()->qzero()));
   return Tensor(buf, args, e);
@@ -829,12 +832,18 @@ Tensor computeQuantizedSigmoidExternalCall(
   const double out_qscale = 1.0f / 256.0f;
   const int64_t out_qzero = (out_qdtype == ScalarType::QInt8) ? -128 : 0;
 
-  auto ResultBuf = makeQBufHandleNHWC(
-      "quantized_sigmoid",
-      outputShape,
-      Dtype(out_qdtype),
-      out_qscale,
-      out_qzero);
+  auto ResultBuf = isNHWC(qx) || isNLC(qx) ? makeQBufHandleNHWC(
+                                                 "quantized_sigmoid",
+                                                 outputShape,
+                                                 Dtype(out_qdtype),
+                                                 out_qscale,
+                                                 out_qzero)
+                                           : makeQBufHandleNCHW(
+                                                 "quantized_sigmoid",
+                                                 outputShape,
+                                                 Dtype(out_qdtype),
+                                                 out_qscale,
+                                                 out_qzero);
   StmtPtr s = ExternalCall::make(
       ResultBuf,
       "nnc_aten_quantized_sigmoid",
