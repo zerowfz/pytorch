@@ -2,7 +2,6 @@ import argparse
 import datetime
 import re
 import sys
-import warnings
 from collections import defaultdict
 
 import torch
@@ -12,6 +11,7 @@ from torch._C import parse_schema
 # breaking change into operators.
 MAX_ALLOWED_PERIOD = datetime.timedelta(days=30)
 
+# [Bypassing BC/FC tests]
 # The date specifies how long the allowlist exclusion should apply to.
 # You should pick a date in the future that you believe you can land your diff before then.
 # But note that this date should be less than a month of when you are including this BC
@@ -30,13 +30,18 @@ MAX_ALLOWED_PERIOD = datetime.timedelta(days=30)
 # ]
 #
 # NB: function name DOES NOT include overload name!
-TEMPORARY_ALLOW_LIST = [
+TEMPORARY_BC_ALLOW_LIST = [
     ("aten::_svd_helper", datetime.date(2022, 3, 1)),
 ]
 
-# WARNING: Operators included in this list indefinitely bypass all BC and FC schema checks.
-# This is almost certainly NOT what you want to do. See note above.
-INDEFINITE_ALLOW_LIST = [
+# Same things as TEMPORARY__BC_ALLOW_LIST but for FC changes
+TEMPORARY_FC_ALLOW_LIST = [
+    ("aten::_svd_helper", datetime.date(2022, 3, 1)),
+]
+
+# WARNING: Operators included in this list indefinitely bypass all BC schema checks.
+# This is almost certainly NOT what you want to do. See note above. ([Bypassing BC/FC tests])
+INDEFINITE_BC_ALLOW_LIST = [
     "c10_experimental",
     # Internal
     "static",
@@ -77,9 +82,56 @@ INDEFINITE_ALLOW_LIST = [
     "aten::_scatter_reduce.two",
 ]
 
-def compile_temp_allow_list():
+# Same thing as INDEFINITE_BC_ALLOW_LIST but for FC changes.
+# In general, we don't recommend adding entry to this list.
+# Please review following docs:
+#
+# 1. https://github.com/pytorch/pytorch/wiki/%5BDraft%5D-PyTorch's-Python-Frontend-Backward-and-Forward-Compatibility-Policy
+# 2. torch/csrc/jit/operator_upgraders/README.md
+INDEFINITE_FC_ALLOW_LIST = [
+    "c10_experimental",
+    # Internal
+    "static",
+    "prim::ModuleDictIndex",
+    "prim::MKLDNNRelu6",
+    "prim::MKLDNNRelu6_",
+    "prim::Concat",
+    # Internal, profiler-specific ops
+    "profiler::_call_end_callbacks_on_jit_fut*",
+    "profiler::_record_function_enter",
+    "aten::_cholesky_helper",
+    "aten::_lstsq_helper",
+    "aten::_syevd_helper",
+    "aten::_linalg_solve_out_helper_",
+    "aten::select_backward",
+    "aten::slice_backward",
+    "aten::diagonal_backward",
+    "aten::rowwise_prune",
+    "aten::adaptive_avg_pool3d_backward",
+    "aten::_embedding_bag_dense_backward",
+    "aten::randperm",
+    "aten::_convolution_nogroup",
+    "aten::miopen_convolution_backward",
+    "aten::miopen_convolution_backward_bias",
+    "aten::miopen_convolution_backward_input",
+    "aten::miopen_convolution_backward_weight",
+    "aten::miopen_convolution_transpose_backward",
+    "aten::miopen_convolution_transpose_backward_input",
+    "aten::miopen_convolution_transpose_backward_weight",
+    "aten::miopen_depthwise_convolution_backward",
+    "aten::miopen_depthwise_convolution_backward_input",
+    "aten::miopen_depthwise_convolution_backward_weight",
+    "prepacked::unpack_prepacked_sizes_conv2d",
+    "prepacked::unpack_prepacked_sizes_linear",
+    "aten::native_multi_head_self_attention",
+    "aten::_native_multi_head_self_attention",
+    "aten::_transform_bias_rescale_qkv",
+    "aten::_scatter_reduce.two",
+]
+
+def compile_temp_allow_list(temp_allow_list):
     output = []
-    for item in TEMPORARY_ALLOW_LIST:
+    for item in temp_allow_list:
         deadline = item[1]
         today = datetime.date.today()
         interval = deadline - today
@@ -94,17 +146,20 @@ def compile_temp_allow_list():
 
     return output
 
-TEMPORARY_ALLOW_LIST_COMPILED = compile_temp_allow_list()
-INDEFINITE_ALLOW_LIST_COMPILED = [re.compile(item) for item in INDEFINITE_ALLOW_LIST]
+TEMPORARY_BC_ALLOW_LIST_COMPILED = compile_temp_allow_list(TEMPORARY_BC_ALLOW_LIST)
+TEMPORARY_FC_ALLOW_LIST_COMPILED = compile_temp_allow_list(TEMPORARY_FC_ALLOW_LIST)
 
-def temp_allow_listed(schema):
-    for item in TEMPORARY_ALLOW_LIST_COMPILED:
+INDEFINITE_BC_ALLOW_LIST_COMPILED = [re.compile(item) for item in INDEFINITE_BC_ALLOW_LIST]
+INDEFINITE_FC_ALLOW_LIST_COMPILED = [re.compile(item) for item in INDEFINITE_FC_ALLOW_LIST]
+
+def temp_allow_listed(schema, compiled_allow_list):
+    for item in compiled_allow_list:
         if item[0].search(str(schema)):
             return True
     return False
 
-def indefinite_allow_listed(schema):
-    for item in INDEFINITE_ALLOW_LIST_COMPILED:
+def indefinite_allow_listed(schema, compiled_allow_list):
+    for item in compiled_allow_list:
         if item.search(str(schema)):
             return True
     return False
@@ -183,17 +238,16 @@ def check_bc(existing_schemas):
     is_bc = True
     broken_ops = []
     for existing_schema in existing_schemas:
-        if temp_allow_listed(existing_schema):
+        if temp_allow_listed(existing_schema, TEMPORARY_BC_ALLOW_LIST_COMPILED):
             print("schema: ", str(existing_schema), " found on allowlist, skipping")
             continue
         if has_valid_upgraders(existing_schema, version_map):
             print("schema: ", str(existing_schema), " has valid upgrader, skipping")
-        if indefinite_allow_listed(existing_schema):
+        if indefinite_allow_listed(existing_schema, INDEFINITE_BC_ALLOW_LIST_COMPILED):
             print("schema: {} is in allowlist for BC-breaking evolution without deadline."
                   "This is dangerous, do not use unless you are sure there will not be "
                   "downstream consequences".format(str(existing_schema)))
             continue
-        print("processing existing schema: ", str(existing_schema))
         matching_new_schemas = new_schema_dict.get(existing_schema.name, [])
         found = False
         for matching_new_schema in matching_new_schemas:
@@ -227,15 +281,14 @@ def check_fc(existing_schemas):
     is_fc = True
     broken_ops = []
     for existing_schema in existing_schemas:
-        if temp_allow_listed(existing_schema):
+        if temp_allow_listed(existing_schema, TEMPORARY_FC_ALLOW_LIST_COMPILED):
             print("schema: ", str(existing_schema), " found on allowlist, skipping")
             continue
-        if indefinite_allow_listed(existing_schema):
+        if indefinite_allow_listed(existing_schema, INDEFINITE_FC_ALLOW_LIST_COMPILED):
             print("schema: {} is in allowlist for FC-breaking evolution without deadline."
                   "This is dangerous, do not use unless you are sure there will not be "
                   "downstream consequences".format(str(existing_schema)))
             continue
-        print("processing existing schema: ", str(existing_schema))
         matching_new_schemas = new_schema_dict.get(existing_schema.name, [])
         found = False
         possible_failure_reasons = []
@@ -265,7 +318,7 @@ def check_fc(existing_schemas):
     if is_fc:
         print("Found forward compatible schemas for all existing schemas")
     else:
-        warnings.warn(
+        print(
             "The PR is introducing a potentially forward incompatible changes to the "
             "operator library. Please contact PyTorch team to confirm "
             "whether this change is wanted or not. \n\nBroken ops: "
@@ -296,9 +349,8 @@ if __name__ == "__main__":
             s = parse_schema(line.strip())
             slist.append(s)
 
-    # TODO in case there is FC breaking changes,
-    # we just warn for now until there is a policy.
-    check_fc(slist)
+    is_fc = check_fc(slist)
+    is_bc = check_bc(slist)
 
-    if not check_bc(slist):
+    if not (is_fc and is_bc):
         sys.exit(1)
