@@ -82,7 +82,7 @@ LTCTensorImpl::LTCTensorImpl(LazyTensor&& tensor)
   is_non_overlapping_and_dense_ = false;
 }
 
-void LTCTensorImpl::set_tensor(const LazyTensor& lazy_tensor) {
+void LTCTensorImpl::set_tensor(const LazyTensorPtr& lazy_tensor) {
   tensor_ = c10::make_intrusive<LazyTensor>(lazy_tensor);
   generation_ = 0;
 }

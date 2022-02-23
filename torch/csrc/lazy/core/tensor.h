@@ -83,7 +83,7 @@ class TORCH_API LazyTensor : public c10::intrusive_ptr_target {
 
   void UpdateFromTensor(at::Tensor tensor, bool sync);
   void UpdateFromTensorOut(at::Tensor tensor);
-  void UpdateFromTensorOut(const LazyTensor& tensor);
+  void UpdateFromTensorOut(const LazyTensorPtr& tensor);
 
   Data* data() const;
 
@@ -203,7 +203,7 @@ TORCH_API LazyTensorPtr GetLtcTensorOrCreateForWrappedNumber(const at::Tensor& t
 
 // Section 2: LazyTensor => at::Tensor.
 // Creates an ATen tensor from an LazyTensor.
-TORCH_API at::Tensor CreateAtenFromLtcTensor(const LazyTensor& ltc_tensor);
+TORCH_API at::Tensor CreateAtenFromLtcTensor(const LazyTensorPtr& ltc_tensor);
 TORCH_API at::Tensor CreateAtenFromLtcTensor(LazyTensor&& ltc_tensor);
 
 template <size_t... Indices>

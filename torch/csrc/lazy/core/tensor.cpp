@@ -412,12 +412,12 @@ void LazyTensor::UpdateFromTensorOut(at::Tensor tensor) {
   UpdateFromTensor(std::move(tensor), /*sync=*/false);
 }
 
-void LazyTensor::UpdateFromTensorOut(const LazyTensor& tensor) {
+void LazyTensor::UpdateFromTensorOut(const LazyTensorPtr& tensor) {
   if (data()->view != nullptr &&
-      shape().Get().numel() != tensor.shape().Get().numel()) {
+      shape().Get().numel() != tensor->shape().Get().numel()) {
     data()->view = nullptr;
   }
-  SetIrValue(tensor.GetIrValue());
+  SetIrValue(tensor->GetIrValue());
 }
 
 Value LazyTensor::CreateTensorNode(BackendDataPtr data, bool read_only) const {
@@ -496,9 +496,9 @@ LazyTensorPtr GetLtcTensorOrCreateForWrappedNumber(const at::Tensor& tensor, con
              : GetLtcTensor(tensor);
 }
 
-at::Tensor CreateAtenFromLtcTensor(const LazyTensor& ltc_tensor) {
-  return ltc_tensor.is_null() ? at::Tensor()
-                              : at::Tensor(c10::make_intrusive<LTCTensorImpl>(ltc_tensor));
+at::Tensor CreateAtenFromLtcTensor(const LazyTensorPtr& ltc_tensor) {
+  return ltc_tensor->is_null() ? at::Tensor()
+                               : at::Tensor(c10::make_intrusive<LTCTensorImpl>(ltc_tensor));
 }
 
 at::Tensor CreateAtenFromLtcTensor(LazyTensor&& ltc_tensor) {
