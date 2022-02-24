@@ -207,12 +207,12 @@ TORCH_API at::Tensor CreateAtenFromLtcTensor(const LazyTensorPtr& ltc_tensor);
 TORCH_API at::Tensor CreateAtenFromLtcTensor(LazyTensor&& ltc_tensor);
 
 template <size_t... Indices>
-auto TupleAtenFromLtcTensorsImpl(const std::vector<LazyTensor>& tensors, std::index_sequence<Indices...>) {
+auto TupleAtenFromLtcTensorsImpl(const std::vector<LazyTensorPtr>& tensors, std::index_sequence<Indices...>) {
     return std::make_tuple(CreateAtenFromLtcTensor(tensors[Indices])...);
 }
 
 template <size_t N>
-auto TupleAtenFromLtcTensors(const std::vector<LazyTensor>& tensors) {
+auto TupleAtenFromLtcTensors(const std::vector<LazyTensorPtr>& tensors) {
     return TupleAtenFromLtcTensorsImpl(tensors, std::make_index_sequence<N>{});
 }
 

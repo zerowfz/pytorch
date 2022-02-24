@@ -83,7 +83,7 @@ LTCTensorImpl::LTCTensorImpl(LazyTensor&& tensor)
 }
 
 void LTCTensorImpl::set_tensor(const LazyTensorPtr& lazy_tensor) {
-  tensor_ = c10::make_intrusive<LazyTensor>(lazy_tensor);
+  tensor_ = c10::make_intrusive<LazyTensor>(*lazy_tensor);
   generation_ = 0;
 }
 
