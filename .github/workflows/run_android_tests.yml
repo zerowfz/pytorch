@@ -1,6 +1,7 @@
 name: android-tests
 
 on:
+  pull_request:
   workflow_dispatch:
 
 jobs:
