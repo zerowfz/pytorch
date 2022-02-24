@@ -390,7 +390,7 @@ def process_function(info: DifferentiabilityInfo, template: CodeTemplate) -> str
             getter_definitions.append(GETTER_DEFINITION_RAW_SAVEDVAR.substitute(
                 op=info.op, name=name, body=GETTER_BODY_RAW_SAVEDVAR))
             should_append_raw_getsetdef = True
-        elif type == BaseCType(tensorListT) or type == BaseCType(iTensorListT):
+        elif type == BaseCType(iTensorListT):
             saved_variables.append(f'std::vector<SavedVariable> {name}_;')
             saved_variables.append(f'bool {name}_released_ = false;')
             # Just clear() is sufficient, we don't need to loop and clear each variable.
