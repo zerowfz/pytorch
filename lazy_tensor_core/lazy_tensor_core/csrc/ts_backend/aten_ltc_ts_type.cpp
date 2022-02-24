@@ -59,10 +59,10 @@ template <typename B>
 at::Tensor DoBinaryOp(const at::Tensor& self, const at::Tensor& other,
                       const B& bin_op) {
   at::ScalarType dtype = at::result_type(self, other);
-  std::pair<torch::lazy::LazyTensor, torch::lazy::LazyTensor> operands =
+  std::pair<torch::lazy::LazyTensorPtr, torch::lazy::LazyTensorPtr> operands =
       GetBinaryOperands(torch::lazy::UnwrapNumber(self, dtype),
                         torch::lazy::UnwrapNumber(other, dtype));
-  torch::lazy::LazyTensor result = bin_op(operands.first, operands.second);
+  torch::lazy::LazyTensorPtr result = bin_op(operands.first, operands.second);
   return torch::lazy::CreateAtenFromLtcTensor(result);
 }
 
@@ -70,7 +70,7 @@ template <typename B>
 at::Tensor DoBinaryOp(const at::Tensor& self, const at::Scalar& other,
                       const B& bin_op) {
   torch::lazy::LazyTensorPtr self_tensor = torch::lazy::GetLtcTensor(self);
-  torch::lazy::LazyTensor result = bin_op(*self_tensor, other);
+  torch::lazy::LazyTensorPtr result = bin_op(self_tensor, other);
   return torch::lazy::CreateAtenFromLtcTensor(result);
 }
 

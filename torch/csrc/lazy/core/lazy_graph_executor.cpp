@@ -506,10 +506,10 @@ size_t LazyGraphExecutor::IncTrimCounter() {
 }
 
 std::string LazyGraphExecutor::DumpBackendComputation(
-    const std::vector<LazyTensor>& tensors) {
+    const std::vector<LazyTensorPtr>& tensors) {
   std::vector<Value> ir_values;
   for (auto& tensor : tensors) {
-    Value ir_value = tensor.CurrentIrValue();
+    Value ir_value = tensor->CurrentIrValue();
     if (ir_value) {
       ir_values.push_back(std::move(ir_value));
     }

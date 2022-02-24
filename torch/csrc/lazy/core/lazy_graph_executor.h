@@ -83,7 +83,7 @@ class TORCH_API LazyGraphExecutor {
 
   // Dumps the backend specific text of the computation accumulated in the graph
   // which is attached the tensors.
-  std::string DumpBackendComputation(const std::vector<LazyTensor>& tensors);
+  std::string DumpBackendComputation(const std::vector<LazyTensorPtr>& tensors);
 
   Value GetDeviceDataIrValue(
       const at::Scalar& value,
